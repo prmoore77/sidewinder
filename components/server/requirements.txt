@@ -1,0 +1,6 @@
+click==8.1.*
+duckdb==0.4.0
+duckdb-engine==0.1.*
+websockets==10.3.*
+munch==2.5.0
+pyarrow==8.0.*
