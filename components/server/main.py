@@ -191,7 +191,8 @@ async def worker_handler(websocket, loop, shard_count):
         # Run the Arrow/DuckDB synchronous code in another process to avoid blocking the main thread event loop
         table_base64_str_list = await loop.run_in_executor(None, dump_tables_to_base64_str_list, shard_count, shard.shard_id)
 
-        worker_shard_dict = dict(shard_id=shard.shard_id,
+        worker_shard_dict = dict(kind="ShardDataset",
+                                 shard_id=shard.shard_id,
                                  table_base64_str_list=table_base64_str_list
                                  )
 
