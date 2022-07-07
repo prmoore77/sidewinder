@@ -119,7 +119,7 @@ async def collect_worker_results(worker_websocket, loop):
                 worker_message = Munch(json.loads(message.decode()))
 
                 if worker_message.kind == "ShardConfirmation":
-                    logger.info(msg=f"Worker: {worker_id} has confirmed its shard: {worker_message.shard_id}")
+                    logger.info(msg=f"Worker: {worker_id} has confirmed its shard: {worker_message.shard_id} - and is ready to process queries.")
                 elif worker_message.kind == "Result":
                     query = QUERIES[worker_message.query_id]
                     sql_client_connection = SQL_CLIENT_CONNECTIONS[UUID(query.sql_client_id)]
