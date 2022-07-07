@@ -13,6 +13,13 @@ from websockets.frames import Close
 from websockets.legacy.client import connect
 from websockets.version import version as websockets_version
 
+import pyarrow
+import pandas
+
+
+def get_dataframe_from_bytes(bytes_value: bytes) -> pyarrow.Table:
+    return pyarrow.ipc.open_stream(bytes_value).read_all()
+
 
 if sys.platform == "win32":
 
@@ -133,7 +140,8 @@ async def run_client(
                     if isinstance(message, str):
                         print_during_input("< " + message)
                     else:
-                        print_during_input("< (binary) " + message.hex())
+                        df = get_dataframe_from_bytes(bytes_value=message)
+                        print_during_input(f"Results:\n{df.to_pandas()}")
 
             if outgoing in done:
                 message = outgoing.result()

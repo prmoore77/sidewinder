@@ -4,3 +4,4 @@ duckdb-engine==0.1.*
 websockets==10.3.*
 munch==2.5.0
 pyarrow==8.0.*
+pyyaml==6.0

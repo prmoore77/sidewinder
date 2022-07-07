@@ -1,0 +1,49 @@
+tables:
+  - name: customer
+    parent_table_name: orders
+    query_template: |-
+      SELECT * 
+        FROM customer 
+       WHERE c_custkey IN (SELECT o_custkey 
+                             FROM {parent_table_dataset}
+                          )
+  - name: lineitem
+    parent_table_name: orders
+    query_template: |-
+      SELECT * 
+        FROM lineitem
+       WHERE l_orderkey IN (SELECT o_orderkey
+                              FROM {parent_table_dataset}
+                           )
+  - name: nation
+    parent_table_name: ''
+    query_template: |-
+      SELECT *
+        FROM nation
+  - name: orders
+    parent_table_name: ''
+    query_template: |-
+      SELECT * 
+        FROM orders 
+       WHERE MOD (o_custkey, {overall_shard_count}) = {shard_id}
+  - name: part
+    parent_table_name: lineitem
+    query_template: |-
+      SELECT *
+        FROM part
+       WHERE p_partkey IN (SELECT l_partkey 
+                             FROM {parent_table_dataset}
+                          )
+  - name: region
+    parent_table_name: ''
+    query_template: |-
+      SELECT *
+        FROM region
+  - name: supplier
+    parent_table_name: part
+    query_template: |-
+      SELECT *
+        FROM supplier 
+       WHERE s_suppkey IN (SELECT p_partkey 
+                             FROM {parent_table_dataset}
+                          )
