@@ -1,9 +1,9 @@
 import asyncio
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 import websockets
 import click
 
-from components.server.utils import get_dataframe_results_as_base64_str, \
+from utils import get_dataframe_results_as_base64_str, \
     combine_bytes_results
 from config import logger
 from utils import coro
@@ -217,6 +217,7 @@ async def handler(websocket, loop, shard_count):
 )
 @coro
 async def main(port, shard_count):
+    logger.info(msg=f"Starting Sidewinder Server - (shard_count: {shard_count})")
     # Initialize our shards
     for i in range(shard_count):
         shard_id = i + 1
@@ -225,7 +226,7 @@ async def main(port, shard_count):
                                  )
 
     loop = asyncio.get_event_loop()
-    loop.set_default_executor(ProcessPoolExecutor())
+    loop.set_default_executor(ThreadPoolExecutor())
     bound_handler = functools.partial(handler, loop=loop, shard_count=shard_count)
     async with websockets.serve(ws_handler=bound_handler, host="localhost", port=port, max_size=1024**3):
         await asyncio.Future()  # run forever

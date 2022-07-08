@@ -1,3 +1,7 @@
+from pglast import parser
+from munch import munchify
+
+x = parser.parse_sql_json(query="""
 select
        l_returnflag,
        l_linestatus,
@@ -18,4 +22,9 @@ select
        l_linestatus
  order by
        l_returnflag,
-       l_linestatus;
+       l_linestatus;""")
+print(x)
+
+y = munchify(x=x)
+
+print(y)

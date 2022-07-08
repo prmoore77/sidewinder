@@ -25,7 +25,7 @@ tables:
     query_template: |-
       SELECT * 
         FROM orders 
-       WHERE MOD (o_custkey, {overall_shard_count}) = {shard_id}
+       WHERE (MOD (o_custkey, {overall_shard_count}) + 1) = {shard_id}
   - name: part
     parent_table_name: lineitem
     query_template: |-

@@ -14,7 +14,7 @@ from websockets.frames import Close
 from websockets.legacy.client import connect
 from websockets.version import version as websockets_version
 
-from components.client.utils import get_dataframe_from_bytes
+from utils import get_dataframe_from_bytes
 
 if sys.platform == "win32":
 
@@ -101,6 +101,7 @@ async def run_client(
     inputs: asyncio.Queue[str],
     stop: asyncio.Future[None],
 ) -> None:
+    print(f"Starting Sidewinder Client - connecting to server: {uri}")
     try:
         websocket = await connect(uri,
                                   extra_headers=dict(),

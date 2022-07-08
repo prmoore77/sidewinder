@@ -2,7 +2,7 @@ import asyncio
 import websockets
 import click
 
-from components.worker.utils import get_dataframe_results_as_base64_str
+from utils import get_dataframe_results_as_base64_str
 from config import logger
 import json
 import duckdb
@@ -20,7 +20,7 @@ WORKER = Munch(worker_id=None, ready=False)
 
 
 async def worker(duckdb_threads):
-    logger.info(msg=f"Starting Sidewinder worker - (using: {duckdb_threads} DuckDB threads)")
+    logger.info(msg=f"Starting Sidewinder Worker - (using: {duckdb_threads} DuckDB threads)")
 
     db_connection = duckdb.connect(database=':memory:')
     db_connection.execute(query=f"PRAGMA threads={duckdb_threads}")

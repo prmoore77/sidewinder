@@ -1,6 +1,0 @@
-click==8.1.*
-duckdb==0.4.0
-duckdb-engine==0.1.*
-structlog==21.5.*
-websockets==10.3.*
-psutil==5.9.*
