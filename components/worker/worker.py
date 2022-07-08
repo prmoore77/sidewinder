@@ -1,6 +1,8 @@
 import asyncio
 import websockets
 import click
+
+from components.worker.utils import get_dataframe_results_as_base64_str
 from config import logger
 import json
 import duckdb
@@ -15,18 +17,6 @@ FAILED = "FAILED"
 
 # Global
 WORKER = Munch(worker_id=None, ready=False)
-
-
-def get_dataframe_bytes(df: pyarrow.Table) -> bytes:
-    sink = pyarrow.BufferOutputStream()
-    with pyarrow.ipc.new_stream(sink, df.schema) as writer:
-        writer.write(df)
-    buf = sink.getvalue()
-    return buf.to_pybytes()
-
-
-def get_dataframe_results_as_base64_str(df: pyarrow.Table) -> str:
-    return base64.b64encode(get_dataframe_bytes(df)).decode()
 
 
 async def worker(duckdb_threads):

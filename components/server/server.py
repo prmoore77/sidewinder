@@ -2,6 +2,9 @@ import asyncio
 from concurrent.futures import ProcessPoolExecutor
 import websockets
 import click
+
+from components.server.utils import get_dataframe_results_as_base64_str, \
+    combine_bytes_results
 from config import logger
 from utils import coro
 import json
@@ -10,7 +13,6 @@ import uuid
 from uuid import UUID
 import functools
 import duckdb
-import pyarrow
 import base64
 from munch import Munch, munchify
 
@@ -83,31 +85,6 @@ async def sql_client_handler(websocket, loop):
         await send_query_to_workers(websocket, loop)
     finally:
         del SQL_CLIENT_CONNECTIONS[websocket.id]
-
-
-def get_dataframe_from_bytes(bytes_value: bytes) -> pyarrow.Table:
-    return pyarrow.ipc.open_stream(bytes_value).read_all()
-
-
-def get_dataframe_bytes(df: pyarrow.Table) -> bytes:
-    sink = pyarrow.BufferOutputStream()
-    with pyarrow.ipc.new_stream(sink, df.schema) as writer:
-        writer.write(df)
-    buf = sink.getvalue()
-    return buf.to_pybytes()
-
-
-def get_dataframe_results_as_base64_str(df: pyarrow.Table) -> str:
-    return base64.b64encode(get_dataframe_bytes(df)).decode()
-
-
-def combine_bytes_results(result_bytes_list) -> bytes:
-    table_list = []
-    for result_bytes in result_bytes_list:
-        table_list.append(get_dataframe_from_bytes(bytes_value=result_bytes))
-
-    combined_result = pyarrow.concat_tables(tables=table_list)
-    return get_dataframe_bytes(df=combined_result)
 
 
 async def collect_worker_results(worker_websocket, loop):

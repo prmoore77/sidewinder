@@ -14,13 +14,7 @@ from websockets.frames import Close
 from websockets.legacy.client import connect
 from websockets.version import version as websockets_version
 
-import pyarrow
-import pandas
-
-
-def get_dataframe_from_bytes(bytes_value: bytes) -> pyarrow.Table:
-    return pyarrow.ipc.open_stream(bytes_value).read_all()
-
+from components.client.utils import get_dataframe_from_bytes
 
 if sys.platform == "win32":
 
