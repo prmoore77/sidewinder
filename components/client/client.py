@@ -7,6 +7,7 @@ import signal
 import sys
 import threading
 from typing import Any, Set
+import re
 
 from websockets.exceptions import ConnectionClosed
 from websockets.frames import Close
@@ -107,7 +108,10 @@ async def run_client(
     stop: asyncio.Future[None],
 ) -> None:
     try:
-        websocket = await connect(uri)
+        websocket = await connect(uri,
+                                  extra_headers=dict(),
+                                  max_size=1024 ** 3
+                                  )
     except Exception as exc:
         print_over_input(f"Failed to connect to {uri}: {exc}.")
         exit_from_event_loop_thread(loop, stop)
@@ -220,8 +224,19 @@ def main() -> None:
     # Read from stdin in the main thread in order to receive signals.
     try:
         while True:
-            # Since there's no size limit, put_nowait is identical to put.
-            message = input("> ")
+            lines = []
+            prompt_str = "> "
+            while True:
+                line = input(prompt_str)
+                if line:
+                    prompt_str = ". "
+                    lines.append(line)
+
+                # Search for a SQL terminator
+                if re.search("(;|/)\s*$", line):
+                    break
+            message = '\n'.join(lines)
+
             loop.call_soon_threadsafe(inputs.put_nowait, message)
     except (KeyboardInterrupt, EOFError):  # ^C, ^D
         loop.call_soon_threadsafe(stop.set_result, None)
