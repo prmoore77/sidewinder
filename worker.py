@@ -19,17 +19,17 @@ FAILED = "FAILED"
 WORKER = Munch(worker_id=None, ready=False)
 
 
-async def worker(duckdb_threads):
-    logger.info(msg=f"Starting Sidewinder Worker - (using: {duckdb_threads} DuckDB threads)")
+async def worker(server_uri, duckdb_threads):
+    logger.info(msg=f"Starting Sidewinder Worker - (using: {duckdb_threads} DuckDB thread(s))")
 
     db_connection = duckdb.connect(database=':memory:')
     db_connection.execute(query=f"PRAGMA threads={duckdb_threads}")
 
-    async with websockets.connect(uri="ws://localhost:8765/worker",
+    async with websockets.connect(uri=server_uri,
                                   extra_headers=dict(),
                                   max_size=1024 ** 3
                                   ) as websocket:
-        logger.info(msg=f"Successfully connected to server - connection: '{websocket.id}'")
+        logger.info(msg=f"Successfully connected to server uri: '{server_uri}' - connection: '{websocket.id}'")
         logger.info(msg=f"Waiting to receive data...")
         while True:
             raw_message = await websocket.recv()
@@ -77,14 +77,21 @@ async def worker(duckdb_threads):
 
 @click.command()
 @click.option(
+    "--server-uri",
+    type=str,
+    default="ws://localhost:8765/worker",
+    show_default=True,
+    help="The server URI to connect to."
+)
+@click.option(
     "--duckdb-threads",
     type=int,
-    default=psutil.cpu_count(),
+    default=1,
     show_default=True,
     help="The number of DuckDB threads to use - default is to use all CPU threads available."
 )
-def main(duckdb_threads: int):
-    asyncio.run(worker(duckdb_threads))
+def main(server_uri: str, duckdb_threads: int):
+    asyncio.run(worker(server_uri, duckdb_threads))
 
 
 if __name__ == "__main__":

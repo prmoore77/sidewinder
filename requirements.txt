@@ -7,3 +7,4 @@ pyarrow==8.0.*
 pyyaml==6.0
 pglast==3.1.*
 pandas==1.4.*
+sqlparse==0.4.2

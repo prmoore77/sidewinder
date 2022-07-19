@@ -16,6 +16,16 @@ from websockets.version import version as websockets_version
 
 from utils import get_dataframe_from_bytes
 
+import pandas as pd
+
+pd.set_option('display.max_rows', None)
+pd.set_option('display.max_columns', None)
+pd.set_option('display.width', 0)
+pd.set_option('display.max_colwidth', None)
+#pd.set_option('display.colheader_justify', 'center')
+pd.set_option('display.precision', 99)
+
+
 if sys.platform == "win32":
 
     def win_enable_vt100() -> None:
