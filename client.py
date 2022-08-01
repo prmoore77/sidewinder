@@ -238,7 +238,7 @@ def main() -> None:
                     lines.append(line)
 
                 # Search for a SQL terminator
-                if re.search("(;|/)\s*$", line):
+                if re.search("(;|^/)\s*$", line):
                     break
             message = '\n'.join(lines)
 

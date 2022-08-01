@@ -1,10 +1,11 @@
 click==8.1.*
 duckdb==0.4.0
-duckdb-engine==0.1.*
+duckdb-engine==0.2.*
 websockets==10.3.*
-munch==2.5.0
+munch==2.5.*
 pyarrow==8.0.*
-pyyaml==6.0
-pglast==3.1.*
+pyyaml==6.*
+pglast==3.*
 pandas==1.4.*
-sqlparse==0.4.2
+sqlparse==0.4.*
+psutil==5.9.*
