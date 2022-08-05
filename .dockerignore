@@ -1,0 +1,7 @@
+venv/
+.idea/
+data/
+Dockerfile
+helm-chart/
+run_server_in_docker.sh
+.gitignore

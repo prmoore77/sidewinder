@@ -88,7 +88,7 @@ async def worker(server_uri, duckdb_threads):
     type=int,
     default=1,
     show_default=True,
-    help="The number of DuckDB threads to use - default is to use all CPU threads available."
+    help="The number of DuckDB threads to use - default is to use 1 CPU thread."
 )
 def main(server_uri: str, duckdb_threads: int):
     asyncio.run(worker(server_uri, duckdb_threads))

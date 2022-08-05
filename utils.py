@@ -31,7 +31,7 @@ def get_dataframe_results_as_base64_str(df: pyarrow.Table) -> str:
     return base64.b64encode(get_dataframe_bytes(df)).decode()
 
 
-def combine_bytes_results(result_bytes_list, summary_query) -> bytes:
+def combine_bytes_results(result_bytes_list, summary_query, duckdb_threads) -> bytes:
     table_list = []
     for result_bytes in result_bytes_list:
         table_list.append(get_dataframe_from_bytes(bytes_value=result_bytes))
@@ -39,6 +39,8 @@ def combine_bytes_results(result_bytes_list, summary_query) -> bytes:
     combined_result = pyarrow.concat_tables(tables=table_list)
 
     con = duckdb.connect(database=':memory:')
+    if duckdb_threads:
+        con.execute(f"PRAGMA threads={duckdb_threads};")
 
     logger.info(msg=f"Running summarization query: '{summary_query}'")
     summarized_result = con.execute(summary_query).fetch_arrow_table()
