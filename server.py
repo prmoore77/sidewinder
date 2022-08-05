@@ -1,5 +1,5 @@
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import websockets
 import click
 
@@ -48,31 +48,37 @@ async def send_query_to_workers(sql_client_websocket, loop):
                 logger.info(msg=f"Message received from SQL client: '{sql_client_websocket.id}' - '{message}'")
 
                 query_id = str(uuid.uuid4())
-                query = Munch(kind="Query",
-                              query_id=query_id,
-                              sql_client_id=str(sql_client_websocket.id),
-                              command=message,
-                              workers=Munch(),
-                              total_workers=0,
-                              completed_workers=0,
-                              status=STARTED,
-                              response_sent_to_client=False
-                              )
-                workers = Munch()
-                for worker_id, worker in WORKER_CONNECTIONS.items():
-                    if worker.ready:
-                        await worker.websocket.send(json.dumps(query))
-                        workers[str(worker_id)] = Munch(worker=worker_id, results=None)
 
-                query.workers = workers
-                query.status = DISTRIBUTED
-                query.total_workers = len(query.workers)
-                QUERIES[query_id] = query
+                try:
+                    parsed_query = Query(message.rstrip("/"))
+                except Exception as e:
+                    await sql_client_websocket.send(
+                        f"Query: '{query_id}' - failed to parse - error: {str(e)}")
+                else:
+                    query = Munch(kind="Query",
+                                  query_id=query_id,
+                                  sql_client_id=str(sql_client_websocket.id),
+                                  command=message,
+                                  workers=Munch(),
+                                  total_workers=0,
+                                  completed_workers=0,
+                                  status=STARTED,
+                                  response_sent_to_client=False
+                                  )
+                    workers = Munch()
+                    for worker_id, worker in WORKER_CONNECTIONS.items():
+                        if worker.ready:
+                            await worker.websocket.send(json.dumps(query))
+                            workers[str(worker_id)] = Munch(worker=worker_id, results=None)
 
-                await sql_client_websocket.send(
-                    f"Query: '{query_id}' - distributed to {len(query.workers)} worker(s) by server")
+                    query.workers = workers
+                    query.status = DISTRIBUTED
+                    query.total_workers = len(query.workers)
+                    query.parsed_query = parsed_query
+                    QUERIES[query_id] = query
 
-                query.parsed_query = Query(message)
+                    await sql_client_websocket.send(
+                        f"Query: '{query_id}' - distributed to {len(query.workers)} worker(s) by server")
 
     except websockets.exceptions.ConnectionClosedError:
         pass
@@ -93,7 +99,7 @@ async def sql_client_handler(websocket, loop):
         del SQL_CLIENT_CONNECTIONS[websocket.id]
 
 
-async def collect_worker_results(worker_websocket, loop):
+async def collect_worker_results(worker_websocket, loop, process_pool):
     try:
         async for message in worker_websocket:
             worker = WORKER_CONNECTIONS[worker_websocket.id]
@@ -101,7 +107,7 @@ async def collect_worker_results(worker_websocket, loop):
             if isinstance(message, bytes):
                 worker_message = Munch(json.loads(message.decode()))
                 logger.info(
-                    msg=f"Message (kind={worker_message.kind}) received from Worker: '{worker.worker_id}' - size: {len(message)}")
+                    msg=f"Message (kind={worker_message.kind}) received from Worker: '{worker.worker_id}' (shard: '{worker.shard_id}') - size: {len(message)}")
                 if worker_message.kind == "ShardConfirmation":
                     logger.info(
                         msg=f"Worker: '{worker.worker_id}' has confirmed its shard: {worker_message.shard_id} - and is ready to process queries.")
@@ -125,16 +131,24 @@ async def collect_worker_results(worker_websocket, loop):
                             for _, worker in query.workers.items():
                                 if worker.results:
                                     results_bytes_list.append(worker.results)
-                                    #  Free up memory
-                                    #  worker.results = None
+                                    # Free up memory
+                                    worker.results = None
 
-                            # Run the Arrow synchronous code in another process to avoid blocking the main thread event loop
-                            result_bytes = await loop.run_in_executor(None, combine_bytes_results, results_bytes_list, query.parsed_query.summary_query)
-                            await sql_client_connection.send(result_bytes)
-                            logger.info(
-                                msg=f"Sent Query: '{query.query_id}' results (size: {len(result_bytes)}) to SQL Client: {query.sql_client_id}")
-                            query.response_sent_to_client = True
-                            query.status = COMPLETED
+                            try:
+                                # Run the Arrow synchronous code in another process to avoid blocking the main thread event loop
+                                result_bytes = await loop.run_in_executor(process_pool, combine_bytes_results, results_bytes_list, query.parsed_query.summary_query)
+                            except Exception as e:
+                                query.status = FAILED
+                                query.error_message = str(e)
+                                await sql_client_connection.send(
+                                    f"Query: {query.query_id} - succeeded on the worker(s) - but failed to summarize on the server - with error: '{query.error_message}'")
+                                query.response_sent_to_client = True
+                            else:
+                                await sql_client_connection.send(result_bytes)
+                                logger.info(
+                                    msg=f"Sent Query: '{query.query_id}' results (size: {len(result_bytes)}) to SQL Client: {query.sql_client_id}")
+                                query.status = COMPLETED
+                                query.response_sent_to_client = True
 
     except websockets.exceptions.ConnectionClosedError:
         pass
@@ -174,7 +188,7 @@ async def get_next_shard():
     return shard
 
 
-async def worker_handler(websocket, loop, database_file, shard_count):
+async def worker_handler(websocket, loop, process_pool, database_file, shard_count):
     try:
         logger.info(
             msg=f"Worker Websocket connection: '{websocket.id}' - connected")
@@ -184,11 +198,12 @@ async def worker_handler(websocket, loop, database_file, shard_count):
 
         # Get a shard that hasn't been passed out yet...
         shard = await get_next_shard()
+        worker.shard_id = shard.shard_id
 
         logger.info(msg=f"Preparing shard: {shard.shard_id} (from database file: '{database_file}') for worker: '{worker.worker_id}'...")
 
         # Run the Arrow/DuckDB synchronous code in another process to avoid blocking the main thread event loop
-        table_base64_str_list = await loop.run_in_executor(None, dump_tables_to_base64_str_list, database_file, shard_count,
+        table_base64_str_list = await loop.run_in_executor(process_pool, dump_tables_to_base64_str_list, database_file, shard_count,
                                                            shard.shard_id)
 
         worker_shard_dict = dict(kind="ShardDataset",
@@ -204,17 +219,17 @@ async def worker_handler(websocket, loop, database_file, shard_count):
 
         shard.distributed = True
 
-        await collect_worker_results(websocket, loop)
+        await collect_worker_results(websocket, loop, process_pool)
     finally:
         logger.warning(msg=f"Worker: '{websocket.id}' has disconnected.")
         del WORKER_CONNECTIONS[websocket.id]
 
 
-async def handler(websocket, loop, database_file, shard_count):
+async def handler(websocket, loop, process_pool, database_file, shard_count):
     if websocket.path == "/client":
         await sql_client_handler(websocket, loop)
     elif websocket.path == "/worker":
-        await worker_handler(websocket, loop, database_file, shard_count)
+        await worker_handler(websocket, loop, process_pool, database_file, shard_count)
     else:
         # No handler for this path; close the connection.
         return
@@ -254,7 +269,8 @@ async def main(port, database_file, shard_count):
 
     loop = asyncio.get_event_loop()
     loop.set_default_executor(ThreadPoolExecutor())
-    bound_handler = functools.partial(handler, loop=loop, database_file=database_file, shard_count=shard_count)
+    process_pool = ProcessPoolExecutor(max_workers=10)
+    bound_handler = functools.partial(handler, loop=loop, process_pool=process_pool, database_file=database_file, shard_count=shard_count)
     async with websockets.serve(ws_handler=bound_handler, host="localhost", port=port, max_size=1024 ** 3):
         await asyncio.Future()  # run forever
 

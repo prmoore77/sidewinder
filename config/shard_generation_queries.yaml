@@ -39,11 +39,19 @@ tables:
     query_template: |-
       SELECT *
         FROM region
-  - name: supplier
+  - name: partsupp
     parent_table_name: part
     query_template: |-
       SELECT *
+        FROM partsupp
+       WHERE ps_partkey IN (SELECT p_partkey
+                              FROM {parent_table_dataset}
+                           )
+  - name: supplier
+    parent_table_name: partsupp
+    query_template: |-
+      SELECT *
         FROM supplier 
-       WHERE s_suppkey IN (SELECT p_partkey 
+       WHERE s_suppkey IN (SELECT ps_suppkey 
                              FROM {parent_table_dataset}
                           )
