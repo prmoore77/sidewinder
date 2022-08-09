@@ -28,6 +28,9 @@ spec:
         - name: {{ .Chart.Name }}
           command: [ "/bin/bash" ]
           args: [ "-c", "sleep infinity" ]
+          env:
+            - name: SERVER_URL
+              value: ws://{{ include "sidewinder.fullname" . }}:{{ .Values.server.service.port }}/client
           securityContext:
             {{- toYaml .Values.client.securityContext | nindent 12 }}
           image: "{{ .Values.client.image.repository }}:{{ .Values.client.image.tag | default .Chart.AppVersion }}"
