@@ -17,8 +17,8 @@ server:
 
   podAnnotations: {}
 
-  podSecurityContext: {}
-    # fsGroup: 2000
+  podSecurityContext:
+    fsGroup: 1000
 
   securityContext: {}
     # capabilities:
@@ -48,6 +48,51 @@ server:
   affinity: {}
 
 worker:
+  replicaCount: 1
+
+  image:
+    repository: 795371563663.dkr.ecr.us-east-2.amazonaws.com/sw
+    pullPolicy: Always
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: latest
+
+  imagePullSecrets: []
+  nameOverride: ""
+  fullnameOverride: ""
+
+  podAnnotations: {}
+
+  podSecurityContext: {}
+    # fsGroup: 2000
+
+  securityContext: {}
+    # capabilities:
+    #   drop:
+    #   - ALL
+    # readOnlyRootFilesystem: true
+    # runAsNonRoot: true
+    # runAsUser: 1000
+
+  service:
+    type: ClusterIP
+    port: 80
+
+  resources:
+    limits:
+      cpu: 1
+      memory: 2Gi
+    requests:
+      cpu: 1
+      memory: 2Gi
+
+  nodeSelector:
+    alpha.eksctl.io/nodegroup-name: sw-cpu-node-group
+
+  tolerations: []
+
+  affinity: {}
+
+client:
   replicaCount: 1
 
   image:

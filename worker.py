@@ -9,6 +9,7 @@ import duckdb
 import pyarrow
 import base64
 from munch import Munch, munchify
+import os
 import psutil
 
 # Constants
@@ -73,13 +74,15 @@ async def worker(server_uri, duckdb_threads):
                                 logger.info(msg=f"Query: {message.query_id} - Succeeded - (row count: {df.num_rows} / size: {df.get_total_buffer_size()})")
                             finally:
                                 await websocket.send(json.dumps(result_dict).encode())
+                elif message.kind == "Error":
+                    logger.error(msg=f"Server sent an error: {message.error_message}")
 
 
 @click.command()
 @click.option(
     "--server-uri",
     type=str,
-    default="ws://localhost:8765/worker",
+    default=os.getenv("SERVER_URL", "ws://localhost:8765/worker"),
     show_default=True,
     help="The server URI to connect to."
 )

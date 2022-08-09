@@ -111,6 +111,8 @@ async def collect_worker_results(worker_websocket, loop, process_pool, duckdb_th
                 if worker_message.kind == "ShardConfirmation":
                     logger.info(
                         msg=f"Worker: '{worker.worker_id}' has confirmed its shard: {worker_message.shard_id} - and is ready to process queries.")
+                    shard = SHARDS[worker_message.shard_id]
+                    shard.confirmed = True
                     worker.ready = True
                 elif worker_message.kind == "Result":
                     query = QUERIES[worker_message.query_id]
@@ -187,6 +189,8 @@ async def get_next_shard():
         if not shard_value.distributed:
             shard = shard_value
             break
+    shard.distributed = True
+    shard.confirmed = False
     return shard
 
 
@@ -204,24 +208,29 @@ async def worker_handler(websocket, loop, process_pool, database_file, shard_cou
 
         logger.info(msg=f"Preparing shard: {shard.shard_id} (from database file: '{database_file}') for worker: '{worker.worker_id}'...")
 
-        # Run the Arrow/DuckDB synchronous code in another process to avoid blocking the main thread event loop
-        table_base64_str_list = await loop.run_in_executor(process_pool, dump_tables_to_base64_str_list, database_file, shard_count,
-                                                           shard.shard_id, duckdb_threads)
+        try:
+            # Run the Arrow/DuckDB synchronous code in another process to avoid blocking the main thread event loop
+            table_base64_str_list = await loop.run_in_executor(process_pool, dump_tables_to_base64_str_list, database_file, shard_count,
+                                                               shard.shard_id, duckdb_threads)
+        except Exception as e:
+            error_message = f"Server shard preparation failed for worker: '{worker.worker_id}' - with error: '{str(e)}'"
+            await websocket.send(
+                json.dumps(dict(kind="Error", error_message=error_message)))
+            logger.error(msg=error_message)
+            raise
+        else:
+            worker_shard_dict = dict(kind="ShardDataset",
+                                     shard_id=shard.shard_id,
+                                     table_base64_str_list=table_base64_str_list,
+                                     worker_id=str(worker.worker_id)
+                                     )
 
-        worker_shard_dict = dict(kind="ShardDataset",
-                                 shard_id=shard.shard_id,
-                                 table_base64_str_list=table_base64_str_list,
-                                 worker_id=str(worker.worker_id)
-                                 )
+            worker_shard_message = json.dumps(worker_shard_dict).encode()
+            await websocket.send(worker_shard_message)
+            logger.info(
+                msg=f"Sent worker: '{worker.worker_id}' - shard: {shard.shard_id} - size: {len(worker_shard_message)}")
 
-        worker_shard_message = json.dumps(worker_shard_dict).encode()
-        await websocket.send(worker_shard_message)
-        logger.info(
-            msg=f"Sent worker: '{worker.worker_id}' - shard: {shard.shard_id} - size: {len(worker_shard_message)}")
-
-        shard.distributed = True
-
-        await collect_worker_results(websocket, loop, process_pool, duckdb_threads)
+            await collect_worker_results(websocket, loop, process_pool, duckdb_threads)
     finally:
         logger.warning(msg=f"Worker: '{websocket.id}' has disconnected.")
         del WORKER_CONNECTIONS[websocket.id]
