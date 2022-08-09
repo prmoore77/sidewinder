@@ -178,7 +178,7 @@ def main() -> None:
     )
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--version", action="store_true")
-    group.add_argument("uri", metavar="<uri>", nargs="?")
+    group.add_argument("uri", metavar="<uri>", nargs="?", default=os.getenv("SERVER_URL", "ws://localhost:8765/client"))
     args = parser.parse_args()
 
     if args.version:
