@@ -17,7 +17,6 @@ import base64
 from munch import Munch, munchify
 from parser.query import Query
 
-
 # Global connection variables
 SQL_CLIENT_CONNECTIONS = Munch()
 WORKER_CONNECTIONS = Munch()
@@ -138,7 +137,10 @@ async def collect_worker_results(worker_websocket, loop, process_pool, duckdb_th
 
                             try:
                                 # Run the Arrow synchronous code in another process to avoid blocking the main thread event loop
-                                result_bytes = await loop.run_in_executor(process_pool, combine_bytes_results, results_bytes_list, query.parsed_query.summary_query, duckdb_threads)
+                                result_bytes = await loop.run_in_executor(process_pool, combine_bytes_results,
+                                                                          results_bytes_list,
+                                                                          query.parsed_query.summary_query,
+                                                                          duckdb_threads)
                             except Exception as e:
                                 query.status = FAILED
                                 query.error_message = str(e)
@@ -156,12 +158,17 @@ async def collect_worker_results(worker_websocket, loop, process_pool, duckdb_th
         pass
 
 
+def duckdb_execute(con, sql: str):
+    logger.debug(msg=f"Executing DuckDB SQL:\n{sql}")
+    return con.execute(sql)
+
+
 def dump_tables_to_base64_str_list(database_file, shard_count, shard_id, duckdb_threads, con=None, parent_table_name="",
                                    parent_temp_table_name="") -> []:
     if not con:
         con = duckdb.connect(database=database_file, read_only=True)
         if duckdb_threads:
-            con.execute(f"PRAGMA threads={duckdb_threads}")
+            duckdb_execute(con, sql=f"PRAGMA threads={duckdb_threads}")
     table_base64_str_list = []
     for table in TABLES.tables:
         if table.parent_table_name == parent_table_name:
@@ -170,18 +177,20 @@ def dump_tables_to_base64_str_list(database_file, shard_count, shard_id, duckdb_
                                shard_id=shard_id,
                                parent_table_dataset=parent_temp_table_name
                                )
-            con.execute(
-                f"CREATE OR REPLACE TEMPORARY TABLE {temp_table_name} AS {table.query_template.format(**format_dict)}")
-            df = con.execute(f"SELECT * FROM {temp_table_name}").fetch_arrow_table().replace_schema_metadata(
+            duckdb_execute(con=con,
+                           sql=f"CREATE OR REPLACE TEMPORARY TABLE {temp_table_name} AS {table.query_template.format(**format_dict)}"
+                           )
+            df = duckdb_execute(con=con,
+                                sql=f"SELECT * FROM {temp_table_name}").fetch_arrow_table().replace_schema_metadata(
                 metadata=dict(name=table.name))
             table_base64_str_list.append(get_dataframe_results_as_base64_str(df))
 
             # Call the routine recursively to get the tree of tables...
-            table_base64_str_list += dump_tables_to_base64_str_list(database_file, shard_count, shard_id, duckdb_threads, con, table.name,
+            table_base64_str_list += dump_tables_to_base64_str_list(database_file, shard_count, shard_id,
+                                                                    duckdb_threads, con, table.name,
                                                                     temp_table_name)
 
     return table_base64_str_list
-
 
 async def get_next_shard():
     shard = None
@@ -206,11 +215,13 @@ async def worker_handler(websocket, loop, process_pool, database_file, shard_cou
         shard = await get_next_shard()
         worker.shard_id = shard.shard_id
 
-        logger.info(msg=f"Preparing shard: {shard.shard_id} (from database file: '{database_file}') for worker: '{worker.worker_id}'...")
+        logger.info(
+            msg=f"Preparing shard: {shard.shard_id} (from database file: '{database_file}') for worker: '{worker.worker_id}'...")
 
         try:
             # Run the Arrow/DuckDB synchronous code in another process to avoid blocking the main thread event loop
-            table_base64_str_list = await loop.run_in_executor(process_pool, dump_tables_to_base64_str_list, database_file, shard_count,
+            table_base64_str_list = await loop.run_in_executor(process_pool, dump_tables_to_base64_str_list,
+                                                               database_file, shard_count,
                                                                shard.shard_id, duckdb_threads)
         except Exception as e:
             error_message = f"Server shard preparation failed for worker: '{worker.worker_id}' - with error: '{str(e)}'"
@@ -276,7 +287,8 @@ async def handler(websocket, loop, process_pool, database_file, shard_count, duc
 )
 @coro
 async def main(port, database_file, shard_count, duckdb_threads):
-    logger.info(msg=f"Starting Sidewinder Server - (database_file: '{database_file}', shard_count: {shard_count}, duckdb_threads: {duckdb_threads or 'default'})")
+    logger.info(
+        msg=f"Starting Sidewinder Server - (database_file: '{database_file}', shard_count: {shard_count}, duckdb_threads: {duckdb_threads or 'default'})")
     # Initialize our shards
     for i in range(shard_count):
         shard_id = i + 1
@@ -287,7 +299,8 @@ async def main(port, database_file, shard_count, duckdb_threads):
     loop = asyncio.get_event_loop()
     loop.set_default_executor(ThreadPoolExecutor())
     process_pool = ProcessPoolExecutor()
-    bound_handler = functools.partial(handler, loop=loop, process_pool=process_pool, database_file=database_file, shard_count=shard_count, duckdb_threads=duckdb_threads)
+    bound_handler = functools.partial(handler, loop=loop, process_pool=process_pool, database_file=database_file,
+                                      shard_count=shard_count, duckdb_threads=duckdb_threads)
     async with websockets.serve(ws_handler=bound_handler, host="0.0.0.0", port=port, max_size=1024 ** 3):
         await asyncio.Future()  # run forever
 

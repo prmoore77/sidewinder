@@ -5,3 +5,4 @@ Dockerfile
 helm-chart/
 run_server_in_docker.sh
 .gitignore
+k8s/

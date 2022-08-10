@@ -23,9 +23,14 @@ tables:
   - name: orders
     parent_table_name: ''
     query_template: |-
+      WITH t AS (
+      SELECT o_orderkey
+           , NTILE ({overall_shard_count}) OVER (ORDER BY o_custkey ASC) AS shard_id
+        FROM orders
+      )
       SELECT * 
-        FROM orders 
-       WHERE (MOD (o_custkey, {overall_shard_count}) + 1) = {shard_id}
+        FROM orders
+       WHERE o_orderkey IN (SELECT t.o_orderkey FROM t WHERE t.shard_id = {shard_id})
   - name: part
     parent_table_name: lineitem
     query_template: |-
