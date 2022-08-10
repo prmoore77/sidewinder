@@ -7,9 +7,9 @@ RUN apt-get update --yes && \
 # Setup the AWS Client
 WORKDIR /tmp
 
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-unzip awscliv2.zip
-sudo ./aws/install
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install
 
 # Create an application user
 RUN useradd app_user --create-home
@@ -19,7 +19,13 @@ USER app_user
 WORKDIR /home/app_user
 
 # Update PATH
-ENV PATH="${PATH}:/home/app_user/.local/bin"
+ARG LOCAL_BIN="/home/app_user/.local/bin"
+ENV PATH="${PATH}:${LOCAL_BIN}"
+
+# Install DuckDB CLI
+RUN mkdir --parents "${LOCAL_BIN}" && \
+    curl --location https://github.com/duckdb/duckdb/releases/download/v0.4.0/duckdb_cli-linux-amd64.zip --output /tmp/duckdb.zip && \
+    unzip /tmp/duckdb.zip -d ${LOCAL_BIN}
 
 # Install Python requirements
 COPY ./requirements.txt .
