@@ -6,7 +6,7 @@ import os
 from utils import get_dataframe_results_as_base64_str, \
     combine_bytes_results
 from config import logger
-from utils import coro, get_cpu_limit
+from utils import coro, get_cpu_limit, get_dataframe_bytes, duckdb_execute, run_query
 import json
 import yaml
 import uuid
@@ -16,6 +16,8 @@ import duckdb
 import base64
 from munch import Munch, munchify
 from parser.query import Query
+import re
+
 
 # Global connection variables
 SQL_CLIENT_CONNECTIONS = Munch()
@@ -32,6 +34,7 @@ with open("config/shard_generation_queries.yaml", "r") as data:
 # Query Status Constants
 STARTED = "STARTED"
 DISTRIBUTED = "DISTRIBUTED"
+RUN_ON_SERVER = "RUN_ON_SERVER"
 FAILED = "FAILED"
 COMPLETED = "COMPLETED"
 
@@ -40,50 +43,131 @@ WORKER_SUCCESS = "SUCCESS"
 WORKER_FAILED = "FAILED"
 
 
-async def send_query_to_workers(sql_client_websocket, loop):
+async def distribute_query_to_workers(query, sql_client_websocket):
+    workers = Munch()
+    for worker_id, worker in WORKER_CONNECTIONS.items():
+        if worker.ready:
+            await worker.websocket.send(json.dumps(query))
+            workers[str(worker_id)] = Munch(worker=worker_id, results=None)
+
+    query.workers = workers
+    query.status = DISTRIBUTED
+    query.total_workers = len(query.workers)
+
+    await sql_client_websocket.send(
+        f"Query: '{query.query_id}' - distributed to {len(query.workers)} worker(s) by server")
+
+
+async def run_query_on_server(query, sql_client_websocket, loop, process_pool, database_file, duckdb_threads, rationale):
+    try:
+        await sql_client_websocket.send(
+            f"Query: '{query.query_id}' - will NOT be distributed - reason: '{rationale}'.  Running server-side...")
+
+        result_bytes = await loop.run_in_executor(process_pool, run_query,
+                                                  database_file,
+                                                  query.command,
+                                                  duckdb_threads)
+
+        await sql_client_websocket.send(result_bytes)
+        logger.info(
+            msg=f"Sent Query: '{query.query_id}' results (size: {len(result_bytes)}) to SQL Client: '{query.sql_client_id}'")
+        query.status = COMPLETED
+        query.response_sent_to_client = True
+    except Exception as e:
+        query.status = FAILED
+        query.error_message = str(e)
+        await sql_client_websocket.send(
+            f"Query: {query.query_id} - FAILED on the server - with error: '{query.error_message}'")
+        query.response_sent_to_client = True
+
+
+async def set_client_attribute(sql_client_websocket, message):
+    try:
+        match = re.search ('^\.set (\S+)\s*=\s*(\S+)\s*$', message.rstrip(' ;/'))
+        setting = match[1]
+
+        if setting == 'distributed':
+            value = match[2]
+            if value.upper() == "TRUE":
+                distributed_mode = True
+            else:
+                distributed_mode = False
+
+            await sql_client_websocket.send(
+                f"Distributed set to: {distributed_mode}")
+
+            setattr(sql_client_websocket, setting, distributed_mode)
+        else:
+            raise ValueError(f".set command parameter: {setting} is invalid...")
+    except Exception as e:
+        await sql_client_websocket.send(
+            f".set command failed with error: {str(e)}")
+
+
+async def process_client_commands(sql_client_websocket, loop, process_pool, database_file, duckdb_threads):
     try:
         async for message in sql_client_websocket:
             if message:
                 logger.info(msg=f"Message received from SQL client: '{sql_client_websocket.id}' - '{message}'")
 
-                query_id = str(uuid.uuid4())
-
-                try:
-                    parsed_query = Query(message.rstrip("/"))
-                except Exception as e:
-                    await sql_client_websocket.send(
-                        f"Query: '{query_id}' - failed to parse - error: {str(e)}")
+                if re.search('^\.set ', message):
+                    await set_client_attribute(sql_client_websocket, message)
                 else:
-                    query = Munch(kind="Query",
-                                  query_id=query_id,
-                                  sql_client_id=str(sql_client_websocket.id),
-                                  command=message,
-                                  workers=Munch(),
-                                  total_workers=0,
-                                  completed_workers=0,
-                                  status=STARTED,
-                                  response_sent_to_client=False
-                                  )
-                    workers = Munch()
-                    for worker_id, worker in WORKER_CONNECTIONS.items():
-                        if worker.ready:
-                            await worker.websocket.send(json.dumps(query))
-                            workers[str(worker_id)] = Munch(worker=worker_id, results=None)
+                    query_id = str(uuid.uuid4())
 
-                    query.workers = workers
-                    query.status = DISTRIBUTED
-                    query.total_workers = len(query.workers)
-                    query.parsed_query = parsed_query
-                    QUERIES[query_id] = query
+                    try:
+                        parsed_query = Query(message.rstrip("/"))
+                    except Exception as e:
+                        await sql_client_websocket.send(
+                            f"Query: '{query_id}' - failed to parse - error: {str(e)}")
+                    else:
+                        query = Munch(kind="Query",
+                                      query_id=query_id,
+                                      sql_client_id=str(sql_client_websocket.id),
+                                      command=message,
+                                      workers=Munch(),
+                                      total_workers=0,
+                                      completed_workers=0,
+                                      status=STARTED,
+                                      response_sent_to_client=False
+                                      )
+                        QUERIES[query_id] = query
 
-                    await sql_client_websocket.send(
-                        f"Query: '{query_id}' - distributed to {len(query.workers)} worker(s) by server")
+                        client_distributed_mode = getattr(sql_client_websocket, "distributed", True)
+
+                        distribute_query = None
+                        reason = ""
+                        comma = ""
+                        if client_distributed_mode and parsed_query.has_aggregates and len(WORKER_CONNECTIONS) > 0:
+                            distribute_query = True
+
+                        if len(WORKER_CONNECTIONS) == 0:
+                            distribute_query = False
+                            reason = "There are no workers connected to the server"
+                            comma = ", "
+
+                        if not parsed_query.has_aggregates:
+                            distribute_query = False
+                            reason += f"{comma}Query contains no aggregates"
+                            comma = ", "
+
+                        if not client_distributed_mode:
+                            distribute_query = False
+                            reason += f"{comma}Client distributed mode is disabled"
+
+                        if distribute_query:
+                            await distribute_query_to_workers(query, sql_client_websocket)
+                        elif not distribute_query:
+                            await run_query_on_server(query, sql_client_websocket, loop, process_pool, database_file,
+                                                      duckdb_threads, reason)
+
+                        query.parsed_query = parsed_query
 
     except websockets.exceptions.ConnectionClosedError:
         pass
 
 
-async def sql_client_handler(websocket, loop):
+async def sql_client_handler(websocket, loop, process_pool, database_file, duckdb_threads):
     try:
         SQL_CLIENT_CONNECTIONS[websocket.id] = websocket
 
@@ -92,7 +176,7 @@ async def sql_client_handler(websocket, loop):
 
         await websocket.send(f"Client - successfully connected to server - connection ID: '{websocket.id}'.")
 
-        await send_query_to_workers(websocket, loop)
+        await process_client_commands(websocket, loop, process_pool, database_file, duckdb_threads)
     finally:
         logger.info(f"SQL Client Websocket connection: '{websocket.id}' has disconnected.")
         del SQL_CLIENT_CONNECTIONS[websocket.id]
@@ -156,11 +240,6 @@ async def collect_worker_results(worker_websocket, loop, process_pool, duckdb_th
 
     except websockets.exceptions.ConnectionClosedError:
         pass
-
-
-def duckdb_execute(con, sql: str):
-    logger.debug(msg=f"Executing DuckDB SQL:\n{sql}")
-    return con.execute(sql)
 
 
 def dump_tables_to_base64_str_list(database_file, shard_count, shard_id, duckdb_threads, con=None, parent_table_name="",
@@ -250,7 +329,7 @@ async def worker_handler(websocket, loop, process_pool, database_file, shard_cou
 
 async def handler(websocket, loop, process_pool, database_file, shard_count, duckdb_threads):
     if websocket.path == "/client":
-        await sql_client_handler(websocket, loop)
+        await sql_client_handler(websocket, loop, process_pool, database_file, duckdb_threads)
     elif websocket.path == "/worker":
         await worker_handler(websocket, loop, process_pool, database_file, shard_count, duckdb_threads)
     else:

@@ -47,7 +47,14 @@ class Query(object):
                     else:
                         summary_aggregate_function = raw_aggregate_function
 
-                    aggregate_clause += f", {summary_aggregate_function} ({target.ResTarget.name}) AS {target.ResTarget.name}"
+                    if hasattr(target.ResTarget, "name"):
+                        column_name = target.ResTarget.name
+                    elif getattr(target.ResTarget.val.FuncCall, "agg_star", False):
+                        column_name = f'"{target.ResTarget.val.FuncCall.funcname[0].String.str}_star()"'
+                    else:
+                        column_name = f'"{target.ResTarget.val.FuncCall.funcname[0].String.str}({target.ResTarget.val.FuncCall.args[0].ColumnRef.fields[0].String.str})"'
+
+                    aggregate_clause += f", {summary_aggregate_function} ({column_name}) AS {column_name}"
 
             select_column_sql = (group_by_clause + aggregate_clause).strip(', ')
             if group_by_clause:
@@ -63,27 +70,27 @@ class Query(object):
                                    )
 
 
-x = Query(query_text="""
-select
-       l_returnflag,
-       l_linestatus,
-       sum(l_quantity) as sum_qty,
-       sum(l_extendedprice) as sum_base_price,
-       sum(l_extendedprice * (1-l_discount)) as sum_disc_price,
-       sum(l_extendedprice * (1-l_discount) * (1+l_tax)) as sum_charge,
-       avg(l_quantity) as avg_qty,
-       avg(l_extendedprice) as avg_price,
-       avg(l_discount) as avg_disc,
-       count(*) as count_order
- from
-       lineitem
- where
-       l_shipdate <= DATE '1998-12-01' - 90
- group by
-       l_returnflag,
-       l_linestatus
- order by
-       l_returnflag,
-       l_linestatus;""")
-
-print(x)
+# x = Query(query_text="""
+# select
+#        l_returnflag,
+#        l_linestatus,
+#        sum(l_quantity) as sum_qty,
+#        sum(l_extendedprice) as sum_base_price,
+#        sum(l_extendedprice * (1-l_discount)) as sum_disc_price,
+#        sum(l_extendedprice * (1-l_discount) * (1+l_tax)) as sum_charge,
+#        avg(l_quantity) as avg_qty,
+#        avg(l_extendedprice) as avg_price,
+#        avg(l_discount) as avg_disc,
+#        count(*) as count_order
+#  from
+#        lineitem
+#  where
+#        l_shipdate <= DATE '1998-12-01' - 90
+#  group by
+#        l_returnflag,
+#        l_linestatus
+#  order by
+#        l_returnflag,
+#        l_linestatus;""")
+#
+# print(x)
