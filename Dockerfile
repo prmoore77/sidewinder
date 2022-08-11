@@ -9,7 +9,8 @@ WORKDIR /tmp
 
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
     unzip awscliv2.zip && \
-    ./aws/install
+    ./aws/install && \
+    rm -f awscliv2.zip
 
 # Create an application user
 RUN useradd app_user --create-home
@@ -25,16 +26,17 @@ ENV PATH="${PATH}:${LOCAL_BIN}"
 # Install DuckDB CLI
 RUN mkdir --parents "${LOCAL_BIN}" && \
     curl --location https://github.com/duckdb/duckdb/releases/download/v0.4.0/duckdb_cli-linux-amd64.zip --output /tmp/duckdb.zip && \
-    unzip /tmp/duckdb.zip -d ${LOCAL_BIN}
+    unzip /tmp/duckdb.zip -d ${LOCAL_BIN} && ]\
+    rm -f /tmp/duckdb.zip
 
 # Install Python requirements
-COPY ./requirements.txt .
+COPY --chown=app_user:app_user ./requirements.txt .
 
 RUN pip install --upgrade pip && \
     pip install --requirement ./requirements.txt
 
 # Copy source code files
-COPY . .
+COPY --chown=app_user:app_user . .
 
 # Open web-socket port
 EXPOSE 8765

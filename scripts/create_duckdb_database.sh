@@ -12,7 +12,7 @@ echo "TPCH_SCALE_FACTOR=${TPCH_SCALE_FACTOR}"
 echo "VIEW_OR_TABLE_OPTION=${VIEW_OR_TABLE_OPTION}"
 
 DATA_DIR="/home/app_user/data/tpch_${TPCH_SCALE_FACTOR}"
-DATABASE_FILE="/tmp/tpch_${TPCH_SCALE_FACTOR}.db"
+DATABASE_FILE="/home/app_user/data/tpch_${TPCH_SCALE_FACTOR}.db"
 
 echo -e "(Re)creating database file: ${DATABASE_FILE}"
 
