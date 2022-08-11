@@ -20,15 +20,16 @@ FAILED = "FAILED"
 WORKER = Munch(worker_id=None, ready=False)
 
 
-async def worker(server_uri, duckdb_threads):
-    logger.info(msg=f"Starting Sidewinder Worker - (using: {duckdb_threads} DuckDB thread(s))")
+async def worker(server_uri, duckdb_threads, websocket_ping_timeout):
+    logger.info(msg=f"Starting Sidewinder Worker - (using: {duckdb_threads} DuckDB thread(s) / websocket ping timeout: {websocket_ping_timeout})")
 
     db_connection = duckdb.connect(database=':memory:')
     db_connection.execute(query=f"PRAGMA threads={duckdb_threads}")
 
     async with websockets.connect(uri=server_uri,
                                   extra_headers=dict(),
-                                  max_size=1024 ** 3
+                                  max_size=1024 ** 3,
+                                  ping_timeout=websocket_ping_timeout
                                   ) as websocket:
         logger.info(msg=f"Successfully connected to server uri: '{server_uri}' - connection: '{websocket.id}'")
         logger.info(msg=f"Waiting to receive data...")
@@ -93,8 +94,14 @@ async def worker(server_uri, duckdb_threads):
     show_default=True,
     help="The number of DuckDB threads to use - default is to use 1 CPU thread."
 )
-def main(server_uri: str, duckdb_threads: int):
-    asyncio.run(worker(server_uri, duckdb_threads))
+@click.option(
+    "--websocket-ping-timeout",
+    type=int,
+    default=os.getenv("PING_TIMEOUT", 60),
+    help="Web-socket ping timeout"
+)
+def main(server_uri: str, duckdb_threads: int, websocket_ping_timeout: int):
+    asyncio.run(worker(server_uri, duckdb_threads, websocket_ping_timeout))
 
 
 if __name__ == "__main__":

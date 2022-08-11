@@ -2,11 +2,11 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import websockets
 import click
-
+import os
 from utils import get_dataframe_results_as_base64_str, \
     combine_bytes_results
 from config import logger
-from utils import coro
+from utils import coro, get_cpu_limit
 import json
 import yaml
 import uuid
@@ -150,7 +150,7 @@ async def collect_worker_results(worker_websocket, loop, process_pool, duckdb_th
                             else:
                                 await sql_client_connection.send(result_bytes)
                                 logger.info(
-                                    msg=f"Sent Query: '{query.query_id}' results (size: {len(result_bytes)}) to SQL Client: {query.sql_client_id}")
+                                    msg=f"Sent Query: '{query.query_id}' results (size: {len(result_bytes)}) to SQL Client: '{query.sql_client_id}'")
                                 query.status = COMPLETED
                                 query.response_sent_to_client = True
 
@@ -191,6 +191,7 @@ def dump_tables_to_base64_str_list(database_file, shard_count, shard_id, duckdb_
                                                                     temp_table_name)
 
     return table_base64_str_list
+
 
 async def get_next_shard():
     shard = None
@@ -282,13 +283,25 @@ async def handler(websocket, loop, process_pool, database_file, shard_count, duc
 @click.option(
     "--duckdb-threads",
     type=int,
-    default=None,
+    default=os.getenv("DUCKDB_THREADS", get_cpu_limit()),
     help="The number of DuckDB threads to use - default is to use all CPU threads available."
 )
+@click.option(
+    "--max-process-workers",
+    type=int,
+    default=os.getenv("MAX_PROCESS_WORKERS", get_cpu_limit()),
+    help="Max process workers"
+)
+@click.option(
+    "--websocket-ping-timeout",
+    type=int,
+    default=os.getenv("PING_TIMEOUT", 60),
+    help="Web-socket ping timeout"
+)
 @coro
-async def main(port, database_file, shard_count, duckdb_threads):
+async def main(port, database_file, shard_count, duckdb_threads, max_process_workers, websocket_ping_timeout):
     logger.info(
-        msg=f"Starting Sidewinder Server - (database_file: '{database_file}', shard_count: {shard_count}, duckdb_threads: {duckdb_threads or 'default'})")
+        msg=f"Starting Sidewinder Server - (database_file: '{database_file}', shard_count: {shard_count}, duckdb_threads: {duckdb_threads}, max_process_workers: {max_process_workers}, websocket_ping_timeout: {websocket_ping_timeout})")
     # Initialize our shards
     for i in range(shard_count):
         shard_id = i + 1
@@ -298,10 +311,15 @@ async def main(port, database_file, shard_count, duckdb_threads):
 
     loop = asyncio.get_event_loop()
     loop.set_default_executor(ThreadPoolExecutor())
-    process_pool = ProcessPoolExecutor()
+    process_pool = ProcessPoolExecutor(max_workers=max_process_workers)
     bound_handler = functools.partial(handler, loop=loop, process_pool=process_pool, database_file=database_file,
                                       shard_count=shard_count, duckdb_threads=duckdb_threads)
-    async with websockets.serve(ws_handler=bound_handler, host="0.0.0.0", port=port, max_size=1024 ** 3):
+    async with websockets.serve(ws_handler=bound_handler,
+                                host="0.0.0.0",
+                                port=port,
+                                max_size=1024 ** 3,
+                                ping_timeout=websocket_ping_timeout
+                                ):
         await asyncio.Future()  # run forever
 
 
