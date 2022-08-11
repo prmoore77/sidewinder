@@ -63,3 +63,19 @@ def combine_bytes_results(result_bytes_list, summary_query, duckdb_threads) -> b
     summarized_result = con.execute(summary_query).fetch_arrow_table()
 
     return get_dataframe_bytes(df=summarized_result)
+
+
+def duckdb_execute(con, sql: str):
+    logger.debug(msg=f"Executing DuckDB SQL:\n{sql}")
+    return con.execute(sql)
+
+
+def run_query(database_file, sql, duckdb_threads) -> bytes:
+    con = duckdb.connect(database=database_file, read_only=True)
+    if duckdb_threads:
+        duckdb_execute(con, sql=f"PRAGMA threads={duckdb_threads}")
+    logger.info(msg=f"Running server-side query: '{sql}'")
+
+    query_result = con.execute(sql).fetch_arrow_table()
+
+    return get_dataframe_bytes(df=query_result)
