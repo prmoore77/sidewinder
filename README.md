@@ -19,9 +19,9 @@ Create a new Python 3.8+ virtual environment - from the root of the repo: instal
 pip install -r requirements.txt
 ```
 
-## Get source sample TPC-H Scale Factor 1 Data (about a 295MB download)
+## Get source sample TPC-H (Scale Factor 1) data (about a 295MB download)
 The sample data is in an Amazon Cloud S3 bucket (owned by Voltron Data) - and requires authentication.
-Authenticate to Amazon Cloud - then select account: "voltrondata-developers"
+Authenticate to Amazon Cloud - then select account: "voltrondata-developers".
 Open a terminal - then set your Environment variables for use with the cli
 - see: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html?icmpid=docs_sso_user_portal
 
