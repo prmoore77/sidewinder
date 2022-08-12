@@ -1,15 +1,15 @@
 # sidewinder
 Skunkworks Distributed Database
 
-Sidewinder is a Python-based Proof-of-Concept Distributed Database that distributes shards of data from the server to a number of workers to "divide and conquer" OLAP database workloads.
+Sidewinder is a [Python](https://python.org)-based Proof-of-Concept Distributed Database that distributes shards of data from the server to a number of workers to "divide and conquer" OLAP database workloads.
 
 It consists of a server, workers, and a client (where you can run interactive SQL commands).
 
 Sidewinder will NOT distribute queries which do not contain aggregates - it will run those on the server side. 
 
-Sidewinder uses Apache Arrow with Websockets for communication between the server, worker(s), and client(s).  
+Sidewinder uses [Apache Arrow](https://arrow.apache.org) with [Websockets](https://websockets.readthedocs.io/en/stable/) for communication between the server, worker(s), and client(s).  
 
-It uses DuckDB as its SQL execution engine - and the PostgreSQL parser to understand how to combine results from distributed workers.
+It uses [DuckDB](https://duckdb.org) as its SQL execution engine - and the PostgreSQL parser to understand how to combine results from distributed workers.
 
 # Setup (to run locally)
 
@@ -25,7 +25,7 @@ Authenticate to Amazon Cloud - then select account: "voltrondata-developers"
 Open a terminal - then set your Environment variables for use with the cli
 - see: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html?icmpid=docs_sso_user_portal
 
-Note: If running on MacOS - you'll need to have homebrew installed, then install coreutils with:  
+Note: If running on MacOS - you'll need to have [homebrew](https://brew.sh) installed, then install coreutils with:  
 ```brew install coreutils```
 
 After that - you can get a sample TPC-H source DuckDB database - run:
@@ -49,7 +49,8 @@ scripts/create_duckdb_database.sh 1
 ```python -m client```
 
 ##### Then - while in the client - you can run a sample query - example:
-```SELECT COUNT(*) FROM lineitem```
+```SELECT COUNT(*) FROM lineitem;```
+##### Note: there are TPC-H queries in the [tpc-h_queries](tpc-h_queries) folder you can run...
 
 ##### To turn distributed mode OFF in the client:
 ```.set distributed = false;```
