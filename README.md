@@ -10,8 +10,7 @@ Sidewinder will NOT distribute queries which do not contain aggregates - it will
 
 Sidewinder uses Apache Arrow with Websockets for communication between the server, worker(s), and client(s).  
 
-It uses DuckDB as its SQL execution engine - and the PostgreSQL parser to understand how to combine results from  
-distributed workers.
+It uses DuckDB as its SQL execution engine - and the PostgreSQL parser to understand how to combine results from distributed workers.
 
 # Setup (to run locally)
 
