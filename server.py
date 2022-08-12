@@ -348,7 +348,7 @@ async def handler(websocket, loop, process_pool, database_file, shard_count, duc
 @click.option(
     "--database-file",
     type=str,
-    default="data/sidewinder_1.duckdb",
+    default="data/tpch_1.db",
     show_default=True,
     help="The source DuckDB database file to use."
 )
