@@ -48,8 +48,15 @@ scripts/create_duckdb_database.sh 1
 #### Open another terminal, then:
 ```python -m client```
 
-##### Then - while in the client - you can run a sample query - example:
+##### Then - while in the client - you can run a sample query that will distribute to the worker(s) (if you have at least one running) - example:
 ```SELECT COUNT(*) FROM lineitem;```
+##### Note: if you are running less than 10 workers - your answer will only reflect n/10 of the data (where n is the worker count).  We will add delta processing at a later point...
+
+##### A query that won't distribute (because it does not contain aggregates) - would be:
+```SELECT * FROM region;```
+##### or:
+```SELECT * FROM lineitem LIMIT 5;```
+
 ##### Note: there are TPC-H queries in the [tpc-h_queries](tpc-h_queries) folder you can run...
 
 ##### To turn distributed mode OFF in the client:
