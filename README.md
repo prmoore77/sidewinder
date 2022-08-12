@@ -1,7 +1,7 @@
 # sidewinder
 Skunkworks Distributed Database
 
-Sidewinder is a Proof-of-Concept Distributed Database that distributes shards of data from the server to  
+Sidewinder is a Python-based Proof-of-Concept Distributed Database that distributes shards of data from the server to  
 a number of workers to "divide and conquer" OLAP database workloads.
 
 It consists of a server, workers, and a client (where you can run interactive SQL commands).
