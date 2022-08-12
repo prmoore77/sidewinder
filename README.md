@@ -27,6 +27,9 @@ Authenticate to Amazon Cloud - then select account: "voltrondata-developers"
 Open a terminal - then set your Environment variables for use with the cli
 - see: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html?icmpid=docs_sso_user_portal
 
+Note: If running on MacOS - you'll need to have homebrew installed, then install coreutils with:  
+```brew install coreutils```
+
 After that - you can get a sample TPC-H source DuckDB database - run:
 ```
 scripts/copy_tpch_data.sh 1
