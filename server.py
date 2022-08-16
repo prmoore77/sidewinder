@@ -18,7 +18,6 @@ from munch import Munch, munchify
 from parser.query import Query
 import re
 
-
 # Global connection variables
 SQL_CLIENT_CONNECTIONS = Munch()
 WORKER_CONNECTIONS = Munch()
@@ -58,7 +57,8 @@ async def distribute_query_to_workers(query, sql_client_websocket):
         f"Query: '{query.query_id}' - distributed to {len(query.workers)} worker(s) by server")
 
 
-async def run_query_on_server(query, sql_client_websocket, loop, process_pool, database_file, duckdb_threads, rationale):
+async def run_query_on_server(query, sql_client_websocket, loop, process_pool, database_file, duckdb_threads,
+                              rationale):
     try:
         await sql_client_websocket.send(
             f"Query: '{query.query_id}' - will NOT be distributed - reason: '{rationale}'.  Running server-side...")
@@ -83,7 +83,7 @@ async def run_query_on_server(query, sql_client_websocket, loop, process_pool, d
 
 async def set_client_attribute(sql_client_websocket, message):
     try:
-        match = re.search ('^\.set (\S+)\s*=\s*(\S+)\s*$', message.rstrip(' ;/'))
+        match = re.search('^\.set (\S+)\s*=\s*(\S+)\s*$', message.rstrip(' ;/'))
         setting = match[1]
 
         if setting == 'distributed':
@@ -242,34 +242,23 @@ async def collect_worker_results(worker_websocket, loop, process_pool, duckdb_th
         pass
 
 
-def dump_tables_to_base64_str_list(database_file, shard_count, shard_id, duckdb_threads, con=None, parent_table_name="",
-                                   parent_temp_table_name="") -> []:
-    if not con:
-        con = duckdb.connect(database=database_file, read_only=True)
-        if duckdb_threads:
-            duckdb_execute(con, sql=f"PRAGMA threads={duckdb_threads}")
-    table_base64_str_list = []
+async def generate_shard_query_list(worker_data_path, shard_count, shard_id, parent_table_name="") -> []:
+    shard_query_list = []
     for table in TABLES.tables:
         if table.parent_table_name == parent_table_name:
-            temp_table_name = table.name + "_temp"
             format_dict = dict(overall_shard_count=shard_count,
                                shard_id=shard_id,
-                               parent_table_dataset=parent_temp_table_name
+                               parent_table_dataset=parent_table_name,
+                               worker_data_path=worker_data_path
                                )
-            duckdb_execute(con=con,
-                           sql=f"CREATE OR REPLACE TEMPORARY TABLE {temp_table_name} AS {table.query_template.format(**format_dict)}"
-                           )
-            df = duckdb_execute(con=con,
-                                sql=f"SELECT * FROM {temp_table_name}").fetch_arrow_table().replace_schema_metadata(
-                metadata=dict(name=table.name))
-            table_base64_str_list.append(get_dataframe_results_as_base64_str(df))
+            table_generation_query = f"CREATE TABLE {table.name} AS {table.query_template.format(**format_dict)}"
+            shard_query_list.append(dict(table_name=table.name, query=table_generation_query))
 
             # Call the routine recursively to get the tree of tables...
-            table_base64_str_list += dump_tables_to_base64_str_list(database_file, shard_count, shard_id,
-                                                                    duckdb_threads, con, table.name,
-                                                                    temp_table_name)
+            shard_query_list += await generate_shard_query_list(worker_data_path, shard_count, shard_id,
+                                                                table.name)
 
-    return table_base64_str_list
+    return shard_query_list
 
 
 async def get_next_shard():
@@ -283,7 +272,7 @@ async def get_next_shard():
     return shard
 
 
-async def worker_handler(websocket, loop, process_pool, database_file, shard_count, duckdb_threads):
+async def worker_handler(websocket, loop, process_pool, worker_data_path, shard_count, duckdb_threads):
     try:
         logger.info(
             msg=f"Worker Websocket connection: '{websocket.id}' - connected")
@@ -296,15 +285,13 @@ async def worker_handler(websocket, loop, process_pool, database_file, shard_cou
         worker.shard_id = shard.shard_id
 
         logger.info(
-            msg=f"Preparing shard: {shard.shard_id} (from database file: '{database_file}') for worker: '{worker.worker_id}'...")
+            msg=f"Preparing shard: {shard.shard_id} (from worker data path: '{worker_data_path}') for worker: '{worker.worker_id}'...")
 
         try:
             # Run the Arrow/DuckDB synchronous code in another process to avoid blocking the main thread event loop
-            table_base64_str_list = await loop.run_in_executor(process_pool, dump_tables_to_base64_str_list,
-                                                               database_file, shard_count,
-                                                               shard.shard_id, duckdb_threads)
+            shard_query_list = await generate_shard_query_list(worker_data_path, shard_count, shard.shard_id)
         except Exception as e:
-            error_message = f"Server shard preparation failed for worker: '{worker.worker_id}' - with error: '{str(e)}'"
+            error_message = f"Server shard query preparation failed for worker: '{worker.worker_id}' - with error: '{str(e)}'"
             await websocket.send(
                 json.dumps(dict(kind="Error", error_message=error_message)))
             logger.error(msg=error_message)
@@ -312,14 +299,14 @@ async def worker_handler(websocket, loop, process_pool, database_file, shard_cou
         else:
             worker_shard_dict = dict(kind="ShardDataset",
                                      shard_id=shard.shard_id,
-                                     table_base64_str_list=table_base64_str_list,
+                                     shard_query_list=shard_query_list,
                                      worker_id=str(worker.worker_id)
                                      )
 
             worker_shard_message = json.dumps(worker_shard_dict).encode()
             await websocket.send(worker_shard_message)
             logger.info(
-                msg=f"Sent worker: '{worker.worker_id}' - shard: {shard.shard_id} - size: {len(worker_shard_message)}")
+                msg=f"Sent worker: '{worker.worker_id}' - shard info for shard: {shard.shard_id} - size: {len(worker_shard_message)}")
 
             await collect_worker_results(websocket, loop, process_pool, duckdb_threads)
     finally:
@@ -327,11 +314,11 @@ async def worker_handler(websocket, loop, process_pool, database_file, shard_cou
         del WORKER_CONNECTIONS[websocket.id]
 
 
-async def handler(websocket, loop, process_pool, database_file, shard_count, duckdb_threads):
+async def handler(websocket, loop, process_pool, database_file, worker_data_path, shard_count, duckdb_threads):
     if websocket.path == "/client":
         await sql_client_handler(websocket, loop, process_pool, database_file, duckdb_threads)
     elif websocket.path == "/worker":
-        await worker_handler(websocket, loop, process_pool, database_file, shard_count, duckdb_threads)
+        await worker_handler(websocket, loop, process_pool, worker_data_path, shard_count, duckdb_threads)
     else:
         # No handler for this path; close the connection.
         return
@@ -346,11 +333,18 @@ async def handler(websocket, loop, process_pool, database_file, shard_count, duc
     help="Run the websocket server on this port."
 )
 @click.option(
+    "--worker-data-path",
+    type=str,
+    default="data/tpch_1",
+    show_default=True,
+    help="The worker source parquet data file path to use (for shards)."
+)
+@click.option(
     "--database-file",
     type=str,
     default="data/tpch_1.db",
     show_default=True,
-    help="The source DuckDB database file to use."
+    help="The source parquet data file path to use."
 )
 @click.option(
     "--shard-count",
@@ -378,9 +372,10 @@ async def handler(websocket, loop, process_pool, database_file, shard_count, duc
     help="Web-socket ping timeout"
 )
 @coro
-async def main(port, database_file, shard_count, duckdb_threads, max_process_workers, websocket_ping_timeout):
+async def main(port, database_file, worker_data_path, shard_count, duckdb_threads, max_process_workers,
+               websocket_ping_timeout):
     logger.info(
-        msg=f"Starting Sidewinder Server - (database_file: '{database_file}', shard_count: {shard_count}, duckdb_threads: {duckdb_threads}, max_process_workers: {max_process_workers}, websocket_ping_timeout: {websocket_ping_timeout})")
+        msg=f"Starting Sidewinder Server - (database_file: '{database_file}', worker_data_path: '{worker_data_path}', shard_count: {shard_count}, duckdb_threads: {duckdb_threads}, max_process_workers: {max_process_workers}, websocket_ping_timeout: {websocket_ping_timeout})")
     # Initialize our shards
     for i in range(shard_count):
         shard_id = i + 1
@@ -392,6 +387,7 @@ async def main(port, database_file, shard_count, duckdb_threads, max_process_wor
     loop.set_default_executor(ThreadPoolExecutor())
     process_pool = ProcessPoolExecutor(max_workers=max_process_workers)
     bound_handler = functools.partial(handler, loop=loop, process_pool=process_pool, database_file=database_file,
+                                      worker_data_path=worker_data_path,
                                       shard_count=shard_count, duckdb_threads=duckdb_threads)
     async with websockets.serve(ws_handler=bound_handler,
                                 host="0.0.0.0",
