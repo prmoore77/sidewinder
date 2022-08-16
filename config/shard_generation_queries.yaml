@@ -28,9 +28,14 @@ tables:
            , NTILE ({overall_shard_count}) OVER (ORDER BY o_custkey ASC) AS shard_id
         FROM read_parquet('{worker_data_path}/orders/*.parquet')
       )
-      SELECT * 
-        FROM read_parquet('{worker_data_path}/orders/*.parquet')
-       WHERE o_orderkey IN (SELECT t.o_orderkey FROM t WHERE t.shard_id = {shard_id})
+      SELECT t.shard_id
+           , orders.* 
+        FROM read_parquet('{worker_data_path}/orders/*.parquet') AS orders
+           JOIN
+             t
+           ON (    orders.o_orderkey = t.o_orderkey
+               AND t.shard_id = {shard_id}
+              )
   - name: part
     parent_table_name: lineitem
     query_template: |-

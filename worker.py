@@ -43,6 +43,7 @@ async def worker(server_uri, duckdb_threads, websocket_ping_timeout):
                     logger.info(msg=f"Worker ID is: '{WORKER.worker_id}'")
                     logger.info(msg=f"Received shard generation queries for shard: {message.shard_id} - size: {len(raw_message)}")
                     for table in message.shard_query_list:
+                        logger.info(msg=f"Executing shard generation query for table: '{table.table_name}' -> \n{table.query}")
                         db_connection.execute(query=table.query)
                         logger.info(msg=f"created table: {table.table_name}")
 
