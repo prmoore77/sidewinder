@@ -2,7 +2,7 @@ import asyncio
 import websockets
 import click
 
-from utils import get_dataframe_results_as_base64_str
+from utils import get_dataframe_results_as_base64_str, get_cpu_limit
 from config import logger
 import json
 import duckdb
@@ -88,9 +88,9 @@ async def worker(server_uri, duckdb_threads, websocket_ping_timeout):
 @click.option(
     "--duckdb-threads",
     type=int,
-    default=1,
+    default=os.getenv("DUCKDB_THREADS", get_cpu_limit()),
     show_default=True,
-    help="The number of DuckDB threads to use - default is to use 1 CPU thread."
+    help="The number of DuckDB threads to use - default is to use all CPU threads available."
 )
 @click.option(
     "--websocket-ping-timeout",

@@ -335,14 +335,14 @@ async def handler(websocket, loop, process_pool, database_file, worker_data_path
 @click.option(
     "--worker-data-path",
     type=str,
-    default="data/tpch_1",
+    default=os.getenv("WORKER_DATA_PATH", "data/tpch_1"),
     show_default=True,
     help="The worker source parquet data file path to use (for shards)."
 )
 @click.option(
     "--database-file",
     type=str,
-    default="data/tpch_1.db",
+    default=os.getenv("DATABASE_FILE", "data/tpch_1.db"),
     show_default=True,
     help="The source parquet data file path to use."
 )
@@ -357,12 +357,14 @@ async def handler(websocket, loop, process_pool, database_file, worker_data_path
     "--duckdb-threads",
     type=int,
     default=os.getenv("DUCKDB_THREADS", get_cpu_limit()),
+    show_default=True,
     help="The number of DuckDB threads to use - default is to use all CPU threads available."
 )
 @click.option(
     "--max-process-workers",
     type=int,
     default=os.getenv("MAX_PROCESS_WORKERS", get_cpu_limit()),
+    show_default=True,
     help="Max process workers"
 )
 @click.option(

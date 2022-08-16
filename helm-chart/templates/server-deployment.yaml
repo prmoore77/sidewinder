@@ -31,10 +31,15 @@ spec:
       containers:
         - name: {{ .Chart.Name }}
           command: [ "/bin/bash" ]
-          args: [ "-c", "sleep infinity" ]
+          args: [ "-c", "python -m server" ]
           volumeMounts:
             - mountPath: "/home/app_user/data"
               name: server-pv-storage
+          env:
+            - name: DATABASE_FILE
+              value: {{ .Values.server.config.databaseFile }}
+            - name: WORKER_DATA_PATH
+              value: {{ .Values.server.config.workerDataPath }}
           securityContext:
             {{- toYaml .Values.server.securityContext | nindent 12 }}
           image: "{{ .Values.server.image.repository }}:{{ .Values.server.image.tag | default .Chart.AppVersion }}"

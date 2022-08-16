@@ -31,7 +31,7 @@ spec:
       containers:
         - name: {{ .Chart.Name }}
           command: [ "/bin/bash" ]
-          args: [ "-c", "sleep infinity" ]
+          args: [ "-c", "python -m worker" ]
           volumeMounts:
             - mountPath: "/home/app_user/data"
               name: server-pv-storage
