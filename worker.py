@@ -41,12 +41,10 @@ async def worker(server_uri, duckdb_threads, websocket_ping_timeout):
                 if message.kind == "ShardDataset":
                     WORKER.worker_id = message.worker_id
                     logger.info(msg=f"Worker ID is: '{WORKER.worker_id}'")
-                    logger.info(msg=f"Received datasets for shard: {message.shard_id} - size: {len(raw_message)}")
-                    for table_base64_str in message.table_base64_str_list:
-                        df = pyarrow.ipc.open_stream(base64.b64decode(s=table_base64_str)).read_all()
-                        table_name = df.schema.metadata[b'name'].decode()
-                        db_connection.execute(query=f"CREATE TABLE {table_name} AS SELECT * FROM df")
-                        logger.info(msg=f"created table: {table_name}")
+                    logger.info(msg=f"Received shard generation queries for shard: {message.shard_id} - size: {len(raw_message)}")
+                    for table in message.shard_query_list:
+                        db_connection.execute(query=table.query)
+                        logger.info(msg=f"created table: {table.table_name}")
 
                     logger.info(msg="All datasets from server created")
                     shard_confirmed_dict = dict(kind="ShardConfirmation", shard_id=message.shard_id, successful=True)
