@@ -70,7 +70,8 @@ async def run_query_on_server(query, sql_client_websocket, loop, process_pool, d
 
         await sql_client_websocket.send(result_bytes)
         logger.info(
-            msg=f"Sent Query: '{query.query_id}' results (size: {len(result_bytes)}) to SQL Client: '{query.sql_client_id}'")
+            msg=f"Sent Query: '{query.query_id}' results (size: {len(result_bytes)}) to SQL Client: '"
+                f"{query.sql_client_id}'")
         query.status = COMPLETED
         query.response_sent_to_client = True
     except Exception as e:
@@ -85,18 +86,18 @@ async def set_client_attribute(sql_client_websocket, message):
     try:
         match = re.search('^\.set (\S+)\s*=\s*(\S+)\s*$', message.rstrip(' ;/'))
         setting = match[1]
+        value = match[2].upper()
 
         if setting == 'distributed':
-            value = match[2]
-            if value.upper() == "TRUE":
-                distributed_mode = True
-            else:
-                distributed_mode = False
-
+            distributed_mode = (value == "TRUE")
             await sql_client_websocket.send(
                 f"Distributed set to: {distributed_mode}")
-
             setattr(sql_client_websocket, setting, distributed_mode)
+        elif setting == "summarize":
+            summarize_mode = (value == "TRUE")
+            await sql_client_websocket.send(
+                f"Summarize set to: {summarize_mode}")
+            setattr(sql_client_websocket, setting, summarize_mode)
         else:
             raise ValueError(f".set command parameter: {setting} is invalid...")
     except Exception as e:
@@ -190,10 +191,12 @@ async def collect_worker_results(worker_websocket, loop, process_pool, duckdb_th
             if isinstance(message, bytes):
                 worker_message = Munch(json.loads(message.decode()))
                 logger.info(
-                    msg=f"Message (kind={worker_message.kind}) received from Worker: '{worker.worker_id}' (shard: '{worker.shard_id}') - size: {len(message)}")
+                    msg=f"Message (kind={worker_message.kind}) received from Worker: '{worker.worker_id}' (shar"
+                        f"d: '{worker.shard_id}') - size: {len(message)}")
                 if worker_message.kind == "ShardConfirmation":
                     logger.info(
-                        msg=f"Worker: '{worker.worker_id}' has confirmed its shard: {worker_message.shard_id} - and is ready to process queries.")
+                        msg=f"Worker: '{worker.worker_id}' has confirmed its shard: {worker_message.shard_id} - and "
+                            f"is ready to process queries.")
                     shard = SHARDS[worker_message.shard_id]
                     shard.confirmed = True
                     worker.ready = True
@@ -203,7 +206,8 @@ async def collect_worker_results(worker_websocket, loop, process_pool, duckdb_th
                     if worker_message.status == WORKER_FAILED:
                         if not query.response_sent_to_client:
                             await sql_client_connection.send(
-                                f"Query: '{worker_message.query_id}' - FAILED with error on worker: '{worker.worker_id}' - with error message: '{worker_message.error_message}'")
+                                f"Query: '{worker_message.query_id}' - FAILED with error on worke"
+                                f"r: '{worker.worker_id}' - with error message: '{worker_message.error_message}'")
                             query.response_sent_to_client = True
                             query.status = FAILED
                     elif worker_message.status == WORKER_SUCCESS:
@@ -220,21 +224,26 @@ async def collect_worker_results(worker_websocket, loop, process_pool, duckdb_th
                                     worker.results = None
 
                             try:
-                                # Run the Arrow synchronous code in another process to avoid blocking the main thread event loop
+                                # Run the Arrow synchronous code in another process to avoid blocking the main thread
+                                # event loop
                                 result_bytes = await loop.run_in_executor(process_pool, combine_bytes_results,
                                                                           results_bytes_list,
                                                                           query.parsed_query.summary_query,
-                                                                          duckdb_threads)
+                                                                          duckdb_threads, getattr(sql_client_connection,
+                                                                                                  "summarize",
+                                                                                                  True))
                             except Exception as e:
                                 query.status = FAILED
                                 query.error_message = str(e)
                                 await sql_client_connection.send(
-                                    f"Query: {query.query_id} - succeeded on the worker(s) - but failed to summarize on the server - with error: '{query.error_message}'")
+                                    f"Query: {query.query_id} - succeeded on the worker(s) - but failed to summarize "
+                                    f"on the server - with error: '{query.error_message}'")
                                 query.response_sent_to_client = True
                             else:
                                 await sql_client_connection.send(result_bytes)
                                 logger.info(
-                                    msg=f"Sent Query: '{query.query_id}' results (size: {len(result_bytes)}) to SQL Client: '{query.sql_client_id}'")
+                                    msg=f"Sent Query: '{query.query_id}' results (size: {len(result_bytes)}) to SQL "
+                                        f"Client: '{query.sql_client_id}'")
                                 query.status = COMPLETED
                                 query.response_sent_to_client = True
 
@@ -285,13 +294,15 @@ async def worker_handler(websocket, loop, process_pool, worker_data_path, shard_
         worker.shard_id = shard.shard_id
 
         logger.info(
-            msg=f"Preparing shard: {shard.shard_id} (from worker data path: '{worker_data_path}') for worker: '{worker.worker_id}'...")
+            msg=f"Preparing shard: {shard.shard_id} (from worker data path: '{worker_data_path}') for worke"
+                f"r: '{worker.worker_id}'...")
 
         try:
             # Run the Arrow/DuckDB synchronous code in another process to avoid blocking the main thread event loop
             shard_query_list = await generate_shard_query_list(worker_data_path, shard_count, shard.shard_id)
         except Exception as e:
-            error_message = f"Server shard query preparation failed for worker: '{worker.worker_id}' - with error: '{str(e)}'"
+            error_message = f"Server shard query preparation failed for worker: '{worker.worker_id}' - with erro" \
+                            f"r: '{str(e)}'"
             await websocket.send(
                 json.dumps(dict(kind="Error", error_message=error_message)))
             logger.error(msg=error_message)
@@ -377,7 +388,8 @@ async def handler(websocket, loop, process_pool, database_file, worker_data_path
 async def main(port, database_file, worker_data_path, shard_count, duckdb_threads, max_process_workers,
                websocket_ping_timeout):
     logger.info(
-        msg=f"Starting Sidewinder Server - (database_file: '{database_file}', worker_data_path: '{worker_data_path}', shard_count: {shard_count}, duckdb_threads: {duckdb_threads}, max_process_workers: {max_process_workers}, websocket_ping_timeout: {websocket_ping_timeout})")
+        msg=f"Starting Sidewinder Server - (database_file: '{database_file}', worker_data_path: '{worker_data_path}', shard_count: {shard_count}, duckdb_threads: "
+            f"{duckdb_threads}, max_process_workers: {max_process_workers}, websocket_ping_timeout: {websocket_ping_timeout})")
     # Initialize our shards
     for i in range(shard_count):
         shard_id = i + 1
