@@ -26,7 +26,7 @@ ENV PATH="${PATH}:${LOCAL_BIN}"
 # Install DuckDB CLI
 RUN mkdir --parents "${LOCAL_BIN}" && \
     curl --location https://github.com/duckdb/duckdb/releases/download/v0.4.0/duckdb_cli-linux-amd64.zip --output /tmp/duckdb.zip && \
-    unzip /tmp/duckdb.zip -d ${LOCAL_BIN} && ]\
+    unzip /tmp/duckdb.zip -d ${LOCAL_BIN} && \
     rm -f /tmp/duckdb.zip
 
 # Install Python requirements
