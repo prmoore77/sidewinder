@@ -23,19 +23,10 @@ tables:
   - name: orders
     parent_table_name: ''
     query_template: |-
-      WITH t AS (
-      SELECT o_orderkey
-           , NTILE ({overall_shard_count}) OVER (ORDER BY o_custkey ASC) AS shard_id
-        FROM read_parquet('{worker_data_path}/orders/*.parquet')
-      )
-      SELECT t.shard_id
+      SELECT CAST ({shard_id} AS INTEGER) AS shard_id
            , orders.* 
         FROM read_parquet('{worker_data_path}/orders/*.parquet') AS orders
-           JOIN
-             t
-           ON (    orders.o_orderkey = t.o_orderkey
-               AND t.shard_id = {shard_id}
-              )
+       WHERE mod (abs (hash (o_custkey)), {overall_shard_count}) + 1 = {shard_id}
   - name: part
     parent_table_name: lineitem
     query_template: |-

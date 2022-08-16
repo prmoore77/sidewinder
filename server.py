@@ -360,7 +360,7 @@ async def handler(websocket, loop, process_pool, database_file, worker_data_path
 @click.option(
     "--shard-count",
     type=int,
-    default=10,
+    default=os.getenv("SHARD_COUNT", 11),
     show_default=True,
     help="The number of hash buckets to shard the data to."
 )

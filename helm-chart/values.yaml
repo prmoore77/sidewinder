@@ -4,6 +4,7 @@
 
 server:
   config:
+    shardCount: 11
     databaseFile: data/tpch_10.db
     workerDataPath: data/tpch_10
 
@@ -52,8 +53,6 @@ server:
   affinity: {}
 
 worker:
-  replicaCount: 10
-
   image:
     repository: 795371563663.dkr.ecr.us-east-2.amazonaws.com/sw
     pullPolicy: Always
