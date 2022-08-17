@@ -2,7 +2,7 @@ import asyncio
 import websockets
 import click
 
-from utils import get_dataframe_results_as_base64_str, get_cpu_limit
+from utils import get_dataframe_results_as_base64_str, get_cpu_count, get_memory_limit
 from config import logger
 import json
 import duckdb
@@ -20,11 +20,13 @@ FAILED = "FAILED"
 WORKER = Munch(worker_id=None, ready=False)
 
 
-async def worker(server_uri, duckdb_threads, websocket_ping_timeout):
-    logger.info(msg=f"Starting Sidewinder Worker - (using: {duckdb_threads} DuckDB thread(s) / websocket ping timeout: {websocket_ping_timeout})")
+async def worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping_timeout):
+    logger.info(msg=f"Starting Sidewinder Worker - (using: {duckdb_threads} DuckDB thread(s) / DuckDB memory limit: {duckdb_memory_limit}b / websocket ping timeout: {websocket_ping_timeout})")
+    logger.info(f"Using DuckDB version: {duckdb.__version__}")
 
     db_connection = duckdb.connect(database=':memory:')
     db_connection.execute(query=f"PRAGMA threads={duckdb_threads}")
+    db_connection.execute(query=f"PRAGMA memory_limit='{duckdb_memory_limit}b'")
 
     async with websockets.connect(uri=server_uri,
                                   extra_headers=dict(),
@@ -89,9 +91,16 @@ async def worker(server_uri, duckdb_threads, websocket_ping_timeout):
 @click.option(
     "--duckdb-threads",
     type=int,
-    default=os.getenv("DUCKDB_THREADS", get_cpu_limit()),
+    default=os.getenv("DUCKDB_THREADS", get_cpu_count()),
     show_default=True,
     help="The number of DuckDB threads to use - default is to use all CPU threads available."
+)
+@click.option(
+    "--duckdb-memory-limit",
+    type=int,
+    default=os.getenv("DUCKDB_MEMORY_LIMIT", int(0.75 * float(get_memory_limit()))),
+    show_default=True,
+    help="The amount of memory to allocate to DuckDB - default is to use 75% of physical memory available."
 )
 @click.option(
     "--websocket-ping-timeout",
@@ -99,8 +108,8 @@ async def worker(server_uri, duckdb_threads, websocket_ping_timeout):
     default=os.getenv("PING_TIMEOUT", 60),
     help="Web-socket ping timeout"
 )
-def main(server_uri: str, duckdb_threads: int, websocket_ping_timeout: int):
-    asyncio.run(worker(server_uri, duckdb_threads, websocket_ping_timeout))
+def main(server_uri: str, duckdb_threads: int, duckdb_memory_limit: int, websocket_ping_timeout: int):
+    asyncio.run(worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping_timeout))
 
 
 if __name__ == "__main__":

@@ -5,8 +5,8 @@
 server:
   config:
     shardCount: 11
-    databaseFile: data/tpch_10.db
-    workerDataPath: data/tpch_10
+    tpchScale: 100
+    pingTimeout: 300
 
   replicaCount: 1
 
@@ -82,11 +82,11 @@ worker:
 
   resources:
     limits:
-      cpu: 2
-      memory: 8Gi
+      cpu: 4
+      memory: 16Gi
     requests:
-      cpu: 2
-      memory: 8Gi
+      cpu: 4
+      memory: 16Gi
 
   nodeSelector:
     alpha.eksctl.io/nodegroup-name: sw-cpu-node-group

@@ -31,18 +31,20 @@ spec:
       containers:
         - name: {{ .Chart.Name }}
           command: [ "/bin/bash" ]
-          #args: [ "-c", "sleep infinity" ]
-          args: [ "-c", "python -m server" ]
+          args: [ "-c", "sleep infinity" ]
+          # args: [ "-c", "python -m server" ]
           volumeMounts:
             - mountPath: "/home/app_user/data"
               name: server-pv-storage
           env:
             - name: SHARD_COUNT
-              value: {{ .Values.server.config.shardCount }}
+              value: {{ .Values.server.config.shardCount | quote }}
             - name: DATABASE_FILE
-              value: {{ .Values.server.config.databaseFile }}
+              value: data/tpch_{{ .Values.server.config.tpchScale }}.db
             - name: WORKER_DATA_PATH
-              value: {{ .Values.server.config.workerDataPath }}
+              value: data/tpch_{{ .Values.server.config.tpchScale }}
+            - name: PING_TIMEOUT
+              value: {{ .Values.server.config.pingTimeout | quote }}
           securityContext:
             {{- toYaml .Values.server.securityContext | nindent 12 }}
           image: "{{ .Values.server.image.repository }}:{{ .Values.server.image.tag | default .Chart.AppVersion }}"
