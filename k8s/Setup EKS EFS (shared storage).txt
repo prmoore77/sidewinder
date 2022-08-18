@@ -1,0 +1,69 @@
+export CLUSTER_NAME="demo"
+export REGION="us-east-2"
+export ACCOUNT_ID="795371563663"
+
+curl -o iam-policy-example.json https://raw.githubusercontent.com/kubernetes-sigs/aws-efs-csi-driver/master/docs/iam-policy-example.json
+
+aws iam create-policy \
+    --policy-name AmazonEKS_EFS_CSI_Driver_Policy \
+    --policy-document file://iam-policy-example.json
+
+eksctl create iamserviceaccount \
+    --cluster ${CLUSTER_NAME} \
+    --namespace kube-system \
+    --name efs-csi-controller-sa \
+    --attach-policy-arn arn:aws:iam::${ACCOUNT_ID}:policy/AmazonEKS_EFS_CSI_Driver_Policy \
+    --approve \
+    --region ${REGION}
+
+helm repo add aws-efs-csi-driver https://kubernetes-sigs.github.io/aws-efs-csi-driver/
+helm repo update
+helm upgrade -i aws-efs-csi-driver aws-efs-csi-driver/aws-efs-csi-driver \
+    --namespace kube-system \
+    --set image.repository=602401143452.dkr.ecr.us-east-2.amazonaws.com/eks/aws-efs-csi-driver \
+    --set controller.serviceAccount.create=false \
+    --set controller.serviceAccount.name=efs-csi-controller-sa
+
+vpc_id=$(aws eks describe-cluster \
+    --name ${CLUSTER_NAME} \
+    --query "cluster.resourcesVpcConfig.vpcId" \
+    --output text)
+
+cidr_range=$(aws ec2 describe-vpcs \
+    --vpc-ids $vpc_id \
+    --query "Vpcs[].CidrBlock" \
+    --output text)
+
+security_group_id=$(aws ec2 create-security-group \
+    --group-name VDEfsSecurityGroup \
+    --description "VD EFS security group" \
+    --vpc-id $vpc_id \
+    --output text)
+
+aws ec2 authorize-security-group-ingress \
+    --group-id $security_group_id \
+    --protocol tcp \
+    --port 2049 \
+    --cidr $cidr_range
+
+file_system_id=$(aws efs create-file-system \
+    --region ${REGION} \
+    --performance-mode generalPurpose \
+    --query 'FileSystemId' \
+    --output text)
+
+kubectl get nodes
+
+aws ec2 describe-subnets \
+    --filters "Name=vpc-id,Values=$vpc_id" \
+    --query 'Subnets[*].{SubnetId: SubnetId,AvailabilityZone: AvailabilityZone,CidrBlock: CidrBlock}' \
+    --output table
+
+for x ('subnet-08c132324fbec5c96' 'subnet-007550facaa547f2c' 'subnet-053f44ef1b65ed6e3' 'subnet-071c686041f12f740' 'subnet-095324605058c259b' 'subnet-0b5212eda14d65807'); do
+    aws efs create-mount-target \
+        --file-system-id $file_system_id \
+        --subnet-id $x \
+        --security-groups $security_group_id
+done
+
+aws efs describe-file-systems --query "FileSystems[*].FileSystemId" --output text
