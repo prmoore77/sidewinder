@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "sidewinder.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.server.config.shardCount }}
+  replicas: 0 # {{ .Values.server.config.shardCount }}
   selector:
     matchLabels:
       {{- include "sidewinder.selectorLabels" . | nindent 6 }}
