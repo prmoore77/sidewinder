@@ -19,7 +19,6 @@ FAILED = "FAILED"
 # Global
 WORKER = Munch(worker_id=None, ready=False)
 
-
 async def worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping_timeout):
     logger.info(msg=f"Starting Sidewinder Worker - (using: {duckdb_threads} DuckDB thread(s) / DuckDB memory limit: {duckdb_memory_limit}b / websocket ping timeout: {websocket_ping_timeout})")
     logger.info(f"Using DuckDB version: {duckdb.__version__}")
@@ -27,6 +26,14 @@ async def worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping
     db_connection = duckdb.connect(database=':memory:')
     db_connection.execute(query=f"PRAGMA threads={duckdb_threads}")
     db_connection.execute(query=f"PRAGMA memory_limit='{duckdb_memory_limit}b'")
+
+    # Setup S3 storage access...
+    db_connection.execute(f"INSTALL httpfs")
+    db_connection.execute(f"LOAD httpfs")
+    db_connection.execute(f"SET s3_region='{os.environ['S3_REGION']}'")
+    db_connection.execute(f"SET s3_access_key_id='{os.environ['S3_ACCESS_KEY_ID']}'")
+    db_connection.execute(f"SET s3_secret_access_key='{os.environ['S3_SECRET_ACCESS_KEY']}'")
+    db_connection.execute(f"SET s3_session_token='{os.environ['S3_SESSION_TOKEN']}'")
 
     async with websockets.connect(uri=server_uri,
                                   extra_headers=dict(),
