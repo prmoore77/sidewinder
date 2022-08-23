@@ -61,3 +61,6 @@ scripts/create_duckdb_database.sh 1
 
 ##### To turn distributed mode OFF in the client:
 ```.set distributed = false;```
+
+##### To turn summarization mode OFF in the client (so that sidewinder does NOT summarize the workers' results - this only applies to distributed mode):
+```.set summarize = false;```
