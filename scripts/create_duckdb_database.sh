@@ -32,6 +32,7 @@ rm -f "${DATABASE_FILE}"
 duckdb "${DATABASE_FILE}" << EOF
 .bail on
 .echo on
+SELECT VERSION();
 CREATE OR REPLACE ${VIEW_OR_TABLE_OPTION} lineitem AS SELECT * FROM read_parquet('${DATA_DIR}/lineitem/*');
 CREATE OR REPLACE ${VIEW_OR_TABLE_OPTION} customer AS SELECT * FROM read_parquet('${DATA_DIR}/customer/*');
 CREATE OR REPLACE ${VIEW_OR_TABLE_OPTION} nation AS SELECT * FROM read_parquet('${DATA_DIR}/nation/*');

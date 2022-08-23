@@ -59,30 +59,34 @@ async def distribute_query_to_workers(query, sql_client_websocket):
         f"Query: '{query.query_id}' - distributed to {len(query.workers)} worker(s) by server")
 
 
-async def run_query_on_server(query, sql_client_websocket, loop, process_pool, database_file, duckdb_threads, duckdb_memory_limit,
+async def run_query_on_server(query, sql_client_connection, loop, process_pool, database_file, duckdb_threads, duckdb_memory_limit,
                               rationale):
-    try:
-        await sql_client_websocket.send(
-            f"Query: '{query.query_id}' - will NOT be distributed - reason: '{rationale}'.  Running server-side...")
+    await sql_client_connection.send(
+        f"Query: '{query.query_id}' - will NOT be distributed - reason: '{rationale}'.  Running server-side...")
 
+    try:
         result_bytes = await loop.run_in_executor(process_pool,
                                                   run_query,
                                                   database_file,
                                                   query.command,
                                                   duckdb_threads,
                                                   duckdb_memory_limit)
-
-        await sql_client_websocket.send(result_bytes)
-        logger.info(
-            msg=f"Sent Query: '{query.query_id}' results (size: {len(result_bytes)}) to SQL Client: '"
-                f"{query.sql_client_id}'")
-        query.status = COMPLETED
-        query.response_sent_to_client = True
     except Exception as e:
         query.status = FAILED
         query.error_message = str(e)
-        await sql_client_websocket.send(
+        await sql_client_connection.send(
             f"Query: {query.query_id} - FAILED on the server - with error: '{query.error_message}'")
+        query.response_sent_to_client = True
+    else:
+        await sql_client_connection.send(result_bytes)
+        query.end_time = datetime.utcnow().isoformat()
+        await sql_client_connection.send(
+            f"Query: {query.query_id} - execution elapsed time: {str(datetime.fromisoformat(query.end_time) - datetime.fromisoformat(query.start_time))}"
+        )
+        logger.info(
+            msg=f"Sent Query: '{query.query_id}' results (size: {len(result_bytes)}) to SQL "
+                f"Client: '{query.sql_client_id}'")
+        query.status = COMPLETED
         query.response_sent_to_client = True
 
 
@@ -242,7 +246,6 @@ async def collect_worker_results(worker_websocket, loop, process_pool, duckdb_th
                                                                                   True
                                                                                   )
                                                                           )
-                                query.end_time = datetime.utcnow().isoformat()
                             except Exception as e:
                                 query.status = FAILED
                                 query.error_message = str(e)
@@ -252,6 +255,7 @@ async def collect_worker_results(worker_websocket, loop, process_pool, duckdb_th
                                 query.response_sent_to_client = True
                             else:
                                 await sql_client_connection.send(result_bytes)
+                                query.end_time = datetime.utcnow().isoformat()
                                 await sql_client_connection.send(
                                     f"Query: {query.query_id} - execution elapsed time: {str(datetime.fromisoformat(query.end_time) - datetime.fromisoformat(query.start_time))}"
                                 )
