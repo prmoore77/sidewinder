@@ -10,8 +10,10 @@ OS_PLATFORM=$(uname)
 if [ "${OS_PLATFORM}" == "Darwin" ];
 then
   READLINK_COMMAND="greadlink"
+  DUCKDB="../include/macos/duckdb"
 else
   READLINK_COMMAND="readlink"
+  DUCKDB="../include/linux/duckdb"
 fi
 
 SCRIPT_DIR=$(dirname ${0})
@@ -29,7 +31,7 @@ echo -e "(Re)creating database file: ${DATABASE_FILE}"
 
 rm -f "${DATABASE_FILE}"
 
-duckdb "${DATABASE_FILE}" << EOF
+${DUCKDB} "${DATABASE_FILE}" << EOF
 .bail on
 .echo on
 SELECT VERSION();
