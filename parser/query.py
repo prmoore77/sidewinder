@@ -1,7 +1,8 @@
-from pglast import parser
-from munch import munchify
 import json
+
 import sqlparse
+from munch import munchify
+from pglast import parser
 
 
 def target_is_aggregate(target):
@@ -16,7 +17,8 @@ def target_is_aggregate(target):
 class Query(object):
     def __init__(self, query_text: str):
         self.query_text = query_text
-        self.parsed_query = munchify(x=json.loads(parser.parse_sql_json(query=self.query_text))).stmts[0]
+        self.parsed_query = munchify(
+            x=json.loads(parser.parse_sql_json(query=self.query_text))).stmts[0]
         self._validate_query()
         self.select_stmt = self.parsed_query.stmt.SelectStmt
 
@@ -24,7 +26,8 @@ class Query(object):
 
     def _validate_query(self):
         if not hasattr(self.parsed_query.stmt, "SelectStmt"):
-            raise RuntimeError("The query is NOT a SELECT statement - it is not supported.")
+            raise RuntimeError(
+                "The query is NOT a SELECT statement - it is not supported.")
 
     @property
     def has_aggregates(self):
@@ -41,7 +44,9 @@ class Query(object):
                 if not target_is_aggregate(target):
                     group_by_clause += f", {target.ResTarget.val.ColumnRef.fields[0].String.str}"
                 else:
-                    raw_aggregate_function = target.ResTarget.val.FuncCall.funcname[0].String.str.upper()
+                    raw_aggregate_function = \
+                        target.ResTarget.val.FuncCall.funcname[
+                            0].String.str.upper()
                     if raw_aggregate_function in ("SUM", "COUNT"):
                         summary_aggregate_function = "SUM"
                     else:
@@ -49,10 +54,14 @@ class Query(object):
 
                     if hasattr(target.ResTarget, "name"):
                         column_name = target.ResTarget.name
-                    elif getattr(target.ResTarget.val.FuncCall, "agg_star", False):
+                    elif getattr(target.ResTarget.val.FuncCall, "agg_star",
+                                 False):
                         column_name = f'"{target.ResTarget.val.FuncCall.funcname[0].String.str}_star()"'
                     else:
-                        column_name = f'"{target.ResTarget.val.FuncCall.funcname[0].String.str}({target.ResTarget.val.FuncCall.args[0].ColumnRef.fields[0].String.str})"'
+                        column_name = (f'"{target.ResTarget.val.FuncCall.funcname[0].String.str}('
+                                       f'{"DISTINCT " if getattr(target.ResTarget.val.FuncCall, "agg_distinct", False) else ""}'
+                                       f'{target.ResTarget.val.FuncCall.args[0].ColumnRef.fields[0].String.str})"'
+                                       )
 
                     aggregate_clause += f", {summary_aggregate_function} ({column_name}) AS {column_name}"
 
@@ -68,7 +77,6 @@ class Query(object):
                                    use_space_around_operators=True,
                                    comma_first=True
                                    )
-
 
 # x = Query(query_text="""
 # select
