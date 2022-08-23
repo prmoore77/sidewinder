@@ -2,7 +2,7 @@ import asyncio
 import websockets
 import click
 
-from utils import get_dataframe_results_as_base64_str
+from utils import get_dataframe_results_as_base64_str, get_cpu_count, get_memory_limit
 from config import logger
 import json
 import duckdb
@@ -20,11 +20,27 @@ FAILED = "FAILED"
 WORKER = Munch(worker_id=None, ready=False)
 
 
-async def worker(server_uri, duckdb_threads, websocket_ping_timeout):
-    logger.info(msg=f"Starting Sidewinder Worker - (using: {duckdb_threads} DuckDB thread(s) / websocket ping timeout: {websocket_ping_timeout})")
+async def worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping_timeout, load_duckdb_s3_extension):
+    logger.info(msg=(f"Starting Sidewinder Worker - (using: {duckdb_threads} DuckDB thread(s) "
+                     f"/ DuckDB memory limit: {duckdb_memory_limit}b "
+                     f"/ websocket ping timeout: {websocket_ping_timeout} "
+                     f"/ load_duckdb_s3_extension: {load_duckdb_s3_extension})"
+                     )
+                )
+    logger.info(f"Using DuckDB version: {duckdb.__version__}")
 
     db_connection = duckdb.connect(database=':memory:')
     db_connection.execute(query=f"PRAGMA threads={duckdb_threads}")
+    db_connection.execute(query=f"PRAGMA memory_limit='{duckdb_memory_limit}b'")
+
+    if load_duckdb_s3_extension:
+        # Setup S3 storage access...
+        db_connection.execute(f"INSTALL httpfs")
+        db_connection.execute(f"LOAD httpfs")
+        db_connection.execute(f"SET s3_region='{os.environ['S3_REGION']}'")
+        db_connection.execute(f"SET s3_access_key_id='{os.environ['S3_ACCESS_KEY_ID']}'")
+        db_connection.execute(f"SET s3_secret_access_key='{os.environ['S3_SECRET_ACCESS_KEY']}'")
+        db_connection.execute(f"SET s3_session_token='{os.environ['S3_SESSION_TOKEN']}'")
 
     async with websockets.connect(uri=server_uri,
                                   extra_headers=dict(),
@@ -41,14 +57,17 @@ async def worker(server_uri, duckdb_threads, websocket_ping_timeout):
                 if message.kind == "ShardDataset":
                     WORKER.worker_id = message.worker_id
                     logger.info(msg=f"Worker ID is: '{WORKER.worker_id}'")
-                    logger.info(msg=f"Received datasets for shard: {message.shard_id} - size: {len(raw_message)}")
-                    for table_base64_str in message.table_base64_str_list:
-                        df = pyarrow.ipc.open_stream(base64.b64decode(s=table_base64_str)).read_all()
-                        table_name = df.schema.metadata[b'name'].decode()
-                        db_connection.execute(query=f"CREATE TABLE {table_name} AS SELECT * FROM df")
-                        logger.info(msg=f"created table: {table_name}")
+                    logger.info(msg=f"Received shard generation queries for shard: {message.shard_id} - size: {len(raw_message)}")
+                    for table in message.shard_query_list:
+                        logger.info(msg=f"Executing shard generation query for table: '{table.table_name}' -> \n{table.query}")
+                        db_connection.execute(query=table.query)
+                        logger.info(msg=f"created table: {table.table_name}")
+
+                    logger.info(msg="Running VACUUM ANALYZE")
+                    db_connection.execute(query="VACUUM ANALYZE")
 
                     logger.info(msg="All datasets from server created")
+
                     shard_confirmed_dict = dict(kind="ShardConfirmation", shard_id=message.shard_id, successful=True)
                     await websocket.send(json.dumps(shard_confirmed_dict).encode())
                     logger.info(msg=f"Sent confirmation to server that worker: '{WORKER.worker_id}' is ready.")
@@ -90,9 +109,16 @@ async def worker(server_uri, duckdb_threads, websocket_ping_timeout):
 @click.option(
     "--duckdb-threads",
     type=int,
-    default=1,
+    default=os.getenv("DUCKDB_THREADS", get_cpu_count()),
     show_default=True,
-    help="The number of DuckDB threads to use - default is to use 1 CPU thread."
+    help="The number of DuckDB threads to use - default is to use all CPU threads available."
+)
+@click.option(
+    "--duckdb-memory-limit",
+    type=int,
+    default=os.getenv("DUCKDB_MEMORY_LIMIT", int(0.75 * float(get_memory_limit()))),
+    show_default=True,
+    help="The amount of memory to allocate to DuckDB - default is to use 75% of physical memory available."
 )
 @click.option(
     "--websocket-ping-timeout",
@@ -100,8 +126,14 @@ async def worker(server_uri, duckdb_threads, websocket_ping_timeout):
     default=os.getenv("PING_TIMEOUT", 60),
     help="Web-socket ping timeout"
 )
-def main(server_uri: str, duckdb_threads: int, websocket_ping_timeout: int):
-    asyncio.run(worker(server_uri, duckdb_threads, websocket_ping_timeout))
+@click.option(
+    "--load-duckdb-s3-extension",
+    type=bool,
+    default=os.getenv("LOAD_DUCKDB_S3_EXTENSION", False),
+    help="Set to True to load the DuckDB S3 extension (if you are using s3 paths)"
+)
+def main(server_uri: str, duckdb_threads: int, duckdb_memory_limit: int, websocket_ping_timeout: int, load_duckdb_s3_extension: bool):
+    asyncio.run(worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping_timeout, load_duckdb_s3_extension))
 
 
 if __name__ == "__main__":

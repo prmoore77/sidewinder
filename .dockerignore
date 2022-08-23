@@ -6,3 +6,5 @@ helm-chart/
 run_server_in_docker.sh
 .gitignore
 k8s/
+docker_build_and_push.sh
+include/macos

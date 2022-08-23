@@ -6,7 +6,7 @@ import os
 from utils import get_dataframe_results_as_base64_str, \
     combine_bytes_results
 from config import logger
-from utils import coro, get_cpu_limit, get_dataframe_bytes, duckdb_execute, run_query
+from utils import coro, get_cpu_count, get_memory_limit, get_dataframe_bytes, duckdb_execute, run_query
 import json
 import yaml
 import uuid
@@ -17,6 +17,7 @@ import base64
 from munch import Munch, munchify
 from parser.query import Query
 import re
+from datetime import datetime
 
 
 # Global connection variables
@@ -58,45 +59,57 @@ async def distribute_query_to_workers(query, sql_client_websocket):
         f"Query: '{query.query_id}' - distributed to {len(query.workers)} worker(s) by server")
 
 
-async def run_query_on_server(query, sql_client_websocket, loop, process_pool, database_file, duckdb_threads, rationale):
-    try:
-        await sql_client_websocket.send(
-            f"Query: '{query.query_id}' - will NOT be distributed - reason: '{rationale}'.  Running server-side...")
+async def send_query_results_to_client(query, result_bytes, sql_client_connection):
+    await sql_client_connection.send(result_bytes)
+    query.end_time = datetime.utcnow().isoformat()
+    await sql_client_connection.send(
+        f"Query: '{query.query_id}' - execution elapsed time: {str(datetime.fromisoformat(query.end_time) - datetime.fromisoformat(query.start_time))}"
+    )
+    logger.info(
+        msg=f"Sent Query: '{query.query_id}' results (size: {len(result_bytes)}) to SQL "
+            f"Client: '{query.sql_client_id}'")
+    query.status = COMPLETED
+    query.response_sent_to_client = True
 
-        result_bytes = await loop.run_in_executor(process_pool, run_query,
+
+async def run_query_on_server(query, sql_client_connection, loop, process_pool, database_file, duckdb_threads, duckdb_memory_limit,
+                              rationale):
+    await sql_client_connection.send(
+        f"Query: '{query.query_id}' - will NOT be distributed - reason: '{rationale}'.  Running server-side...")
+
+    try:
+        result_bytes = await loop.run_in_executor(process_pool,
+                                                  run_query,
                                                   database_file,
                                                   query.command,
-                                                  duckdb_threads)
-
-        await sql_client_websocket.send(result_bytes)
-        logger.info(
-            msg=f"Sent Query: '{query.query_id}' results (size: {len(result_bytes)}) to SQL Client: '{query.sql_client_id}'")
-        query.status = COMPLETED
-        query.response_sent_to_client = True
+                                                  duckdb_threads,
+                                                  duckdb_memory_limit)
     except Exception as e:
         query.status = FAILED
         query.error_message = str(e)
-        await sql_client_websocket.send(
+        await sql_client_connection.send(
             f"Query: {query.query_id} - FAILED on the server - with error: '{query.error_message}'")
         query.response_sent_to_client = True
+    else:
+        await send_query_results_to_client(query, result_bytes, sql_client_connection)
 
 
 async def set_client_attribute(sql_client_websocket, message):
     try:
-        match = re.search ('^\.set (\S+)\s*=\s*(\S+)\s*$', message.rstrip(' ;/'))
+        match = re.search('^\.set (\S+)\s*=\s*(\S+)\s*$', message.rstrip(' ;/'))
         setting = match[1]
+        value = match[2].upper()
 
         if setting == 'distributed':
-            value = match[2]
-            if value.upper() == "TRUE":
-                distributed_mode = True
-            else:
-                distributed_mode = False
-
+            distributed_mode = (value == "TRUE")
             await sql_client_websocket.send(
                 f"Distributed set to: {distributed_mode}")
-
             setattr(sql_client_websocket, setting, distributed_mode)
+        elif setting == "summarize":
+            summarize_mode = (value == "TRUE")
+            await sql_client_websocket.send(
+                f"Summarize set to: {summarize_mode}")
+            setattr(sql_client_websocket, setting, summarize_mode)
         else:
             raise ValueError(f".set command parameter: {setting} is invalid...")
     except Exception as e:
@@ -104,7 +117,7 @@ async def set_client_attribute(sql_client_websocket, message):
             f".set command failed with error: {str(e)}")
 
 
-async def process_client_commands(sql_client_websocket, loop, process_pool, database_file, duckdb_threads):
+async def process_client_commands(sql_client_websocket, loop, process_pool, database_file, duckdb_threads, duckdb_memory_limit):
     try:
         async for message in sql_client_websocket:
             if message:
@@ -129,7 +142,8 @@ async def process_client_commands(sql_client_websocket, loop, process_pool, data
                                       total_workers=0,
                                       completed_workers=0,
                                       status=STARTED,
-                                      response_sent_to_client=False
+                                      response_sent_to_client=False,
+                                      start_time=datetime.utcnow().isoformat()
                                       )
                         QUERIES[query_id] = query
 
@@ -159,7 +173,7 @@ async def process_client_commands(sql_client_websocket, loop, process_pool, data
                             await distribute_query_to_workers(query, sql_client_websocket)
                         elif not distribute_query:
                             await run_query_on_server(query, sql_client_websocket, loop, process_pool, database_file,
-                                                      duckdb_threads, reason)
+                                                      duckdb_threads, duckdb_memory_limit, reason)
 
                         query.parsed_query = parsed_query
 
@@ -167,7 +181,7 @@ async def process_client_commands(sql_client_websocket, loop, process_pool, data
         pass
 
 
-async def sql_client_handler(websocket, loop, process_pool, database_file, duckdb_threads):
+async def sql_client_handler(websocket, loop, process_pool, database_file, duckdb_threads, duckdb_memory_limit):
     try:
         SQL_CLIENT_CONNECTIONS[websocket.id] = websocket
 
@@ -176,13 +190,13 @@ async def sql_client_handler(websocket, loop, process_pool, database_file, duckd
 
         await websocket.send(f"Client - successfully connected to server - connection ID: '{websocket.id}'.")
 
-        await process_client_commands(websocket, loop, process_pool, database_file, duckdb_threads)
+        await process_client_commands(websocket, loop, process_pool, database_file, duckdb_threads, duckdb_memory_limit)
     finally:
         logger.info(f"SQL Client Websocket connection: '{websocket.id}' has disconnected.")
         del SQL_CLIENT_CONNECTIONS[websocket.id]
 
 
-async def collect_worker_results(worker_websocket, loop, process_pool, duckdb_threads):
+async def collect_worker_results(worker_websocket, loop, process_pool, duckdb_threads, duckdb_memory_limit):
     try:
         async for message in worker_websocket:
             worker = WORKER_CONNECTIONS[worker_websocket.id]
@@ -190,10 +204,12 @@ async def collect_worker_results(worker_websocket, loop, process_pool, duckdb_th
             if isinstance(message, bytes):
                 worker_message = Munch(json.loads(message.decode()))
                 logger.info(
-                    msg=f"Message (kind={worker_message.kind}) received from Worker: '{worker.worker_id}' (shard: '{worker.shard_id}') - size: {len(message)}")
+                    msg=f"Message (kind={worker_message.kind}) received from Worker: '{worker.worker_id}' (shar"
+                        f"d: '{worker.shard_id}') - size: {len(message)}")
                 if worker_message.kind == "ShardConfirmation":
                     logger.info(
-                        msg=f"Worker: '{worker.worker_id}' has confirmed its shard: {worker_message.shard_id} - and is ready to process queries.")
+                        msg=f"Worker: '{worker.worker_id}' has confirmed its shard: {worker_message.shard_id} - and "
+                            f"is ready to process queries.")
                     shard = SHARDS[worker_message.shard_id]
                     shard.confirmed = True
                     worker.ready = True
@@ -203,7 +219,8 @@ async def collect_worker_results(worker_websocket, loop, process_pool, duckdb_th
                     if worker_message.status == WORKER_FAILED:
                         if not query.response_sent_to_client:
                             await sql_client_connection.send(
-                                f"Query: '{worker_message.query_id}' - FAILED with error on worker: '{worker.worker_id}' - with error message: '{worker_message.error_message}'")
+                                f"Query: '{worker_message.query_id}' - FAILED with error on worke"
+                                f"r: '{worker.worker_id}' - with error message: '{worker_message.error_message}'")
                             query.response_sent_to_client = True
                             query.status = FAILED
                     elif worker_message.status == WORKER_SUCCESS:
@@ -220,56 +237,50 @@ async def collect_worker_results(worker_websocket, loop, process_pool, duckdb_th
                                     worker.results = None
 
                             try:
-                                # Run the Arrow synchronous code in another process to avoid blocking the main thread event loop
-                                result_bytes = await loop.run_in_executor(process_pool, combine_bytes_results,
+                                # Run the Arrow synchronous code in another process to avoid blocking the main thread
+                                # event loop
+                                result_bytes = await loop.run_in_executor(process_pool,
+                                                                          combine_bytes_results,
                                                                           results_bytes_list,
                                                                           query.parsed_query.summary_query,
-                                                                          duckdb_threads)
+                                                                          duckdb_threads,
+                                                                          duckdb_memory_limit,
+                                                                          getattr(sql_client_connection,
+                                                                                  "summarize",
+                                                                                  True
+                                                                                  )
+                                                                          )
                             except Exception as e:
                                 query.status = FAILED
                                 query.error_message = str(e)
                                 await sql_client_connection.send(
-                                    f"Query: {query.query_id} - succeeded on the worker(s) - but failed to summarize on the server - with error: '{query.error_message}'")
+                                    f"Query: {query.query_id} - succeeded on the worker(s) - but failed to summarize "
+                                    f"on the server - with error: '{query.error_message}'")
                                 query.response_sent_to_client = True
                             else:
-                                await sql_client_connection.send(result_bytes)
-                                logger.info(
-                                    msg=f"Sent Query: '{query.query_id}' results (size: {len(result_bytes)}) to SQL Client: '{query.sql_client_id}'")
-                                query.status = COMPLETED
-                                query.response_sent_to_client = True
+                                await send_query_results_to_client(query, result_bytes, sql_client_connection)
 
     except websockets.exceptions.ConnectionClosedError:
         pass
 
 
-def dump_tables_to_base64_str_list(database_file, shard_count, shard_id, duckdb_threads, con=None, parent_table_name="",
-                                   parent_temp_table_name="") -> []:
-    if not con:
-        con = duckdb.connect(database=database_file, read_only=True)
-        if duckdb_threads:
-            duckdb_execute(con, sql=f"PRAGMA threads={duckdb_threads}")
-    table_base64_str_list = []
+async def generate_shard_query_list(worker_data_path, shard_count, shard_id, parent_table_name="") -> []:
+    shard_query_list = []
     for table in TABLES.tables:
         if table.parent_table_name == parent_table_name:
-            temp_table_name = table.name + "_temp"
             format_dict = dict(overall_shard_count=shard_count,
                                shard_id=shard_id,
-                               parent_table_dataset=parent_temp_table_name
+                               parent_table_dataset=parent_table_name,
+                               worker_data_path=worker_data_path
                                )
-            duckdb_execute(con=con,
-                           sql=f"CREATE OR REPLACE TEMPORARY TABLE {temp_table_name} AS {table.query_template.format(**format_dict)}"
-                           )
-            df = duckdb_execute(con=con,
-                                sql=f"SELECT * FROM {temp_table_name}").fetch_arrow_table().replace_schema_metadata(
-                metadata=dict(name=table.name))
-            table_base64_str_list.append(get_dataframe_results_as_base64_str(df))
+            table_generation_query = f"CREATE TABLE {table.name} AS {table.query_template.format(**format_dict)}"
+            shard_query_list.append(dict(table_name=table.name, query=table_generation_query))
 
             # Call the routine recursively to get the tree of tables...
-            table_base64_str_list += dump_tables_to_base64_str_list(database_file, shard_count, shard_id,
-                                                                    duckdb_threads, con, table.name,
-                                                                    temp_table_name)
+            shard_query_list += await generate_shard_query_list(worker_data_path, shard_count, shard_id,
+                                                                table.name)
 
-    return table_base64_str_list
+    return shard_query_list
 
 
 async def get_next_shard():
@@ -283,7 +294,7 @@ async def get_next_shard():
     return shard
 
 
-async def worker_handler(websocket, loop, process_pool, database_file, shard_count, duckdb_threads):
+async def worker_handler(websocket, loop, process_pool, worker_data_path, shard_count, duckdb_threads, duckdb_memory_limit):
     try:
         logger.info(
             msg=f"Worker Websocket connection: '{websocket.id}' - connected")
@@ -296,15 +307,15 @@ async def worker_handler(websocket, loop, process_pool, database_file, shard_cou
         worker.shard_id = shard.shard_id
 
         logger.info(
-            msg=f"Preparing shard: {shard.shard_id} (from database file: '{database_file}') for worker: '{worker.worker_id}'...")
+            msg=f"Preparing shard: {shard.shard_id} (from worker data path: '{worker_data_path}') for worke"
+                f"r: '{worker.worker_id}'...")
 
         try:
             # Run the Arrow/DuckDB synchronous code in another process to avoid blocking the main thread event loop
-            table_base64_str_list = await loop.run_in_executor(process_pool, dump_tables_to_base64_str_list,
-                                                               database_file, shard_count,
-                                                               shard.shard_id, duckdb_threads)
+            shard_query_list = await generate_shard_query_list(worker_data_path, shard_count, shard.shard_id)
         except Exception as e:
-            error_message = f"Server shard preparation failed for worker: '{worker.worker_id}' - with error: '{str(e)}'"
+            error_message = f"Server shard query preparation failed for worker: '{worker.worker_id}' - with erro" \
+                            f"r: '{str(e)}'"
             await websocket.send(
                 json.dumps(dict(kind="Error", error_message=error_message)))
             logger.error(msg=error_message)
@@ -312,26 +323,30 @@ async def worker_handler(websocket, loop, process_pool, database_file, shard_cou
         else:
             worker_shard_dict = dict(kind="ShardDataset",
                                      shard_id=shard.shard_id,
-                                     table_base64_str_list=table_base64_str_list,
+                                     shard_query_list=shard_query_list,
                                      worker_id=str(worker.worker_id)
                                      )
 
             worker_shard_message = json.dumps(worker_shard_dict).encode()
             await websocket.send(worker_shard_message)
             logger.info(
-                msg=f"Sent worker: '{worker.worker_id}' - shard: {shard.shard_id} - size: {len(worker_shard_message)}")
+                msg=f"Sent worker: '{worker.worker_id}' - shard info for shard: {shard.shard_id} - size: {len(worker_shard_message)}")
 
-            await collect_worker_results(websocket, loop, process_pool, duckdb_threads)
+            await collect_worker_results(websocket, loop, process_pool, duckdb_threads, duckdb_memory_limit)
     finally:
         logger.warning(msg=f"Worker: '{websocket.id}' has disconnected.")
+        if worker.shard_id:
+            worker_shard = SHARDS[worker.shard_id]
+            worker_shard.distributed = False
+            worker_shard.confirmed = False
         del WORKER_CONNECTIONS[websocket.id]
 
 
-async def handler(websocket, loop, process_pool, database_file, shard_count, duckdb_threads):
+async def handler(websocket, loop, process_pool, database_file, worker_data_path, shard_count, duckdb_threads, duckdb_memory_limit):
     if websocket.path == "/client":
-        await sql_client_handler(websocket, loop, process_pool, database_file, duckdb_threads)
+        await sql_client_handler(websocket, loop, process_pool, database_file, duckdb_threads, duckdb_memory_limit)
     elif websocket.path == "/worker":
-        await worker_handler(websocket, loop, process_pool, database_file, shard_count, duckdb_threads)
+        await worker_handler(websocket, loop, process_pool, worker_data_path, shard_count, duckdb_threads, duckdb_memory_limit)
     else:
         # No handler for this path; close the connection.
         return
@@ -346,29 +361,45 @@ async def handler(websocket, loop, process_pool, database_file, shard_count, duc
     help="Run the websocket server on this port."
 )
 @click.option(
+    "--worker-data-path",
+    type=str,
+    default=os.getenv("WORKER_DATA_PATH", "data/tpch_1"),
+    show_default=True,
+    help="The worker source parquet data file path to use (for shards)."
+)
+@click.option(
     "--database-file",
     type=str,
-    default="data/tpch_1.db",
+    default=os.getenv("DATABASE_FILE", "data/tpch_1.db"),
     show_default=True,
-    help="The source DuckDB database file to use."
+    help="The source parquet data file path to use."
 )
 @click.option(
     "--shard-count",
     type=int,
-    default=10,
+    default=os.getenv("SHARD_COUNT", 11),
     show_default=True,
     help="The number of hash buckets to shard the data to."
 )
 @click.option(
     "--duckdb-threads",
     type=int,
-    default=os.getenv("DUCKDB_THREADS", get_cpu_limit()),
+    default=os.getenv("DUCKDB_THREADS", get_cpu_count()),
+    show_default=True,
     help="The number of DuckDB threads to use - default is to use all CPU threads available."
+)
+@click.option(
+    "--duckdb-memory-limit",
+    type=int,
+    default=os.getenv("DUCKDB_MEMORY_LIMIT", int(0.75 * float(get_memory_limit()))),
+    show_default=True,
+    help="The amount of memory to allocate to DuckDB - default is to use 75% of physical memory available."
 )
 @click.option(
     "--max-process-workers",
     type=int,
-    default=os.getenv("MAX_PROCESS_WORKERS", get_cpu_limit()),
+    default=os.getenv("MAX_PROCESS_WORKERS", get_cpu_count()),
+    show_default=True,
     help="Max process workers"
 )
 @click.option(
@@ -378,9 +409,13 @@ async def handler(websocket, loop, process_pool, database_file, shard_count, duc
     help="Web-socket ping timeout"
 )
 @coro
-async def main(port, database_file, shard_count, duckdb_threads, max_process_workers, websocket_ping_timeout):
+async def main(port, database_file, worker_data_path, shard_count, duckdb_threads, duckdb_memory_limit, max_process_workers,
+               websocket_ping_timeout):
     logger.info(
-        msg=f"Starting Sidewinder Server - (database_file: '{database_file}', shard_count: {shard_count}, duckdb_threads: {duckdb_threads}, max_process_workers: {max_process_workers}, websocket_ping_timeout: {websocket_ping_timeout})")
+        msg=f"Starting Sidewinder Server - (database_file: '{database_file}', worker_data_path: '{worker_data_path}', shard_count: {shard_count}, duckdb_threads: "
+            f"{duckdb_threads}, duckdb_memory_limit: {duckdb_memory_limit}b, max_process_workers: {max_process_workers}, websocket_ping_timeout: {websocket_ping_timeout})")
+    logger.info(f"Using DuckDB version: {duckdb.__version__}")
+
     # Initialize our shards
     for i in range(shard_count):
         shard_id = i + 1
@@ -392,7 +427,8 @@ async def main(port, database_file, shard_count, duckdb_threads, max_process_wor
     loop.set_default_executor(ThreadPoolExecutor())
     process_pool = ProcessPoolExecutor(max_workers=max_process_workers)
     bound_handler = functools.partial(handler, loop=loop, process_pool=process_pool, database_file=database_file,
-                                      shard_count=shard_count, duckdb_threads=duckdb_threads)
+                                      worker_data_path=worker_data_path,
+                                      shard_count=shard_count, duckdb_threads=duckdb_threads, duckdb_memory_limit=duckdb_memory_limit)
     async with websockets.serve(ws_handler=bound_handler,
                                 host="0.0.0.0",
                                 port=port,

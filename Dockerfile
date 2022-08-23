@@ -2,7 +2,11 @@ FROM --platform=linux/amd64 python:3.8
 
 # Update OS and install packages
 RUN apt-get update --yes && \
-    apt-get dist-upgrade --yes
+    apt-get dist-upgrade --yes && \
+    apt-get install --yes \
+      cmake \
+      ninja-build \
+      vim
 
 # Setup the AWS Client
 WORKDIR /tmp
@@ -17,17 +21,13 @@ RUN useradd app_user --create-home
 
 USER app_user
 
-WORKDIR /home/app_user
-
 # Update PATH
 ARG LOCAL_BIN="/home/app_user/.local/bin"
 ENV PATH="${PATH}:${LOCAL_BIN}"
 
-# Install DuckDB CLI
-RUN mkdir --parents "${LOCAL_BIN}" && \
-    curl --location https://github.com/duckdb/duckdb/releases/download/v0.4.0/duckdb_cli-linux-amd64.zip --output /tmp/duckdb.zip && \
-    unzip /tmp/duckdb.zip -d ${LOCAL_BIN} && ]\
-    rm -f /tmp/duckdb.zip
+RUN mkdir --parents ${LOCAL_BIN}
+
+WORKDIR /home/app_user
 
 # Install Python requirements
 COPY --chown=app_user:app_user ./requirements.txt .
@@ -37,6 +37,8 @@ RUN pip install --upgrade pip && \
 
 # Copy source code files
 COPY --chown=app_user:app_user . .
+
+RUN ln -fs ${PWD}/include/linux/duckdb ${LOCAL_BIN}/duckdb
 
 # Open web-socket port
 EXPOSE 8765
