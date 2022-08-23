@@ -17,6 +17,8 @@ import base64
 from munch import Munch, munchify
 from parser.query import Query
 import re
+from datetime import datetime
+
 
 # Global connection variables
 SQL_CLIENT_CONNECTIONS = Munch()
@@ -132,7 +134,8 @@ async def process_client_commands(sql_client_websocket, loop, process_pool, data
                                       total_workers=0,
                                       completed_workers=0,
                                       status=STARTED,
-                                      response_sent_to_client=False
+                                      response_sent_to_client=False,
+                                      start_time=datetime.utcnow().isoformat()
                                       )
                         QUERIES[query_id] = query
 
@@ -239,6 +242,7 @@ async def collect_worker_results(worker_websocket, loop, process_pool, duckdb_th
                                                                                   True
                                                                                   )
                                                                           )
+                                query.end_time = datetime.utcnow().isoformat()
                             except Exception as e:
                                 query.status = FAILED
                                 query.error_message = str(e)
@@ -248,6 +252,9 @@ async def collect_worker_results(worker_websocket, loop, process_pool, duckdb_th
                                 query.response_sent_to_client = True
                             else:
                                 await sql_client_connection.send(result_bytes)
+                                await sql_client_connection.send(
+                                    f"Query: {query.query_id} - execution elapsed time: {str(datetime.fromisoformat(query.end_time) - datetime.fromisoformat(query.start_time))}"
+                                )
                                 logger.info(
                                     msg=f"Sent Query: '{query.query_id}' results (size: {len(result_bytes)}) to SQL "
                                         f"Client: '{query.sql_client_id}'")
