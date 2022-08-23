@@ -19,21 +19,28 @@ FAILED = "FAILED"
 # Global
 WORKER = Munch(worker_id=None, ready=False)
 
-async def worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping_timeout):
-    logger.info(msg=f"Starting Sidewinder Worker - (using: {duckdb_threads} DuckDB thread(s) / DuckDB memory limit: {duckdb_memory_limit}b / websocket ping timeout: {websocket_ping_timeout})")
+
+async def worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping_timeout, load_duckdb_s3_extension):
+    logger.info(msg=(f"Starting Sidewinder Worker - (using: {duckdb_threads} DuckDB thread(s) "
+                     f"/ DuckDB memory limit: {duckdb_memory_limit}b "
+                     f"/ websocket ping timeout: {websocket_ping_timeout} "
+                     f"/ load_duckdb_s3_extension: {load_duckdb_s3_extension})"
+                     )
+                )
     logger.info(f"Using DuckDB version: {duckdb.__version__}")
 
     db_connection = duckdb.connect(database=':memory:')
     db_connection.execute(query=f"PRAGMA threads={duckdb_threads}")
     db_connection.execute(query=f"PRAGMA memory_limit='{duckdb_memory_limit}b'")
 
-    # Setup S3 storage access...
-    db_connection.execute(f"INSTALL httpfs")
-    db_connection.execute(f"LOAD httpfs")
-    db_connection.execute(f"SET s3_region='{os.environ['S3_REGION']}'")
-    db_connection.execute(f"SET s3_access_key_id='{os.environ['S3_ACCESS_KEY_ID']}'")
-    db_connection.execute(f"SET s3_secret_access_key='{os.environ['S3_SECRET_ACCESS_KEY']}'")
-    db_connection.execute(f"SET s3_session_token='{os.environ['S3_SESSION_TOKEN']}'")
+    if load_duckdb_s3_extension:
+        # Setup S3 storage access...
+        db_connection.execute(f"INSTALL httpfs")
+        db_connection.execute(f"LOAD httpfs")
+        db_connection.execute(f"SET s3_region='{os.environ['S3_REGION']}'")
+        db_connection.execute(f"SET s3_access_key_id='{os.environ['S3_ACCESS_KEY_ID']}'")
+        db_connection.execute(f"SET s3_secret_access_key='{os.environ['S3_SECRET_ACCESS_KEY']}'")
+        db_connection.execute(f"SET s3_session_token='{os.environ['S3_SESSION_TOKEN']}'")
 
     async with websockets.connect(uri=server_uri,
                                   extra_headers=dict(),
@@ -56,7 +63,11 @@ async def worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping
                         db_connection.execute(query=table.query)
                         logger.info(msg=f"created table: {table.table_name}")
 
+                    logger.info(msg="Running VACUUM ANALYZE")
+                    db_connection.execute(query="VACUUM ANALYZE")
+
                     logger.info(msg="All datasets from server created")
+
                     shard_confirmed_dict = dict(kind="ShardConfirmation", shard_id=message.shard_id, successful=True)
                     await websocket.send(json.dumps(shard_confirmed_dict).encode())
                     logger.info(msg=f"Sent confirmation to server that worker: '{WORKER.worker_id}' is ready.")
@@ -115,8 +126,14 @@ async def worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping
     default=os.getenv("PING_TIMEOUT", 60),
     help="Web-socket ping timeout"
 )
-def main(server_uri: str, duckdb_threads: int, duckdb_memory_limit: int, websocket_ping_timeout: int):
-    asyncio.run(worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping_timeout))
+@click.option(
+    "--load-duckdb-s3-extension",
+    type=bool,
+    default=os.getenv("LOAD_DUCKDB_S3_EXTENSION", False),
+    help="Set to True to load the DuckDB S3 extension (if you are using s3 paths)"
+)
+def main(server_uri: str, duckdb_threads: int, duckdb_memory_limit: int, websocket_ping_timeout: int, load_duckdb_s3_extension: bool):
+    asyncio.run(worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping_timeout, load_duckdb_s3_extension))
 
 
 if __name__ == "__main__":

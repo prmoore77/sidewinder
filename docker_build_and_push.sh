@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 # Be sure to login first..
 # aws configure sso
 # SSO start URL [None]: https://voltrondata.awsapps.com/start
