@@ -63,7 +63,7 @@ async def send_query_results_to_client(query, result_bytes, sql_client_connectio
     await sql_client_connection.send(result_bytes)
     query.end_time = datetime.utcnow().isoformat()
     await sql_client_connection.send(
-        f"Query: {query.query_id} - execution elapsed time: {str(datetime.fromisoformat(query.end_time) - datetime.fromisoformat(query.start_time))}"
+        f"Query: '{query.query_id}' - execution elapsed time: {str(datetime.fromisoformat(query.end_time) - datetime.fromisoformat(query.start_time))}"
     )
     logger.info(
         msg=f"Sent Query: '{query.query_id}' results (size: {len(result_bytes)}) to SQL "
