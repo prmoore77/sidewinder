@@ -38,7 +38,7 @@ RUN pip install --upgrade pip && \
 # Copy source code files
 COPY --chown=app_user:app_user . .
 
-RUN mv ./include/duckdb ${LOCAL_BIN}
+RUN ln -fs ${PWD}/include/linux/duckdb ${LOCAL_BIN}/duckdb
 
 # Open web-socket port
 EXPOSE 8765
