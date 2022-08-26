@@ -11,13 +11,38 @@ import base64
 from munch import Munch, munchify
 import os
 import psutil
+import re
 
 # Constants
 SUCCESS = "SUCCESS"
 FAILED = "FAILED"
+CTAS_RETRY_LIMIT = 3
 
 # Global
 WORKER = Munch(worker_id=None, ready=False)
+
+
+async def create_table(db_connection, table):
+    logger.info(msg=f"Executing shard generation query for table: '{table.table_name}' -> \n{table.query}")
+
+    db_connection.execute(query=table.query)
+
+    logger.info(msg=f"created table: {table.table_name}")
+
+
+async def build_shard_datasets(db_connection, message, raw_message, websocket):
+    WORKER.worker_id = message.worker_id
+    logger.info(msg=f"Worker ID is: '{WORKER.worker_id}'")
+    logger.info(msg=f"Received shard generation queries for shard: {message.shard_id} - size: {len(raw_message)}")
+    for table in message.shard_query_list:
+        await create_table(db_connection, table)
+    logger.info(msg="Running VACUUM ANALYZE")
+    db_connection.execute(query="VACUUM ANALYZE")
+    logger.info(msg="All datasets from server created")
+    shard_confirmed_dict = dict(kind="ShardConfirmation", shard_id=message.shard_id, successful=True)
+    await websocket.send(json.dumps(shard_confirmed_dict).encode())
+    logger.info(msg=f"Sent confirmation to server that worker: '{WORKER.worker_id}' is ready.")
+    WORKER.ready = True
 
 
 async def worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping_timeout, load_duckdb_s3_extension):
@@ -55,23 +80,7 @@ async def worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping
             if isinstance(raw_message, bytes):
                 message = munchify(x=json.loads(raw_message.decode()))
                 if message.kind == "ShardDataset":
-                    WORKER.worker_id = message.worker_id
-                    logger.info(msg=f"Worker ID is: '{WORKER.worker_id}'")
-                    logger.info(msg=f"Received shard generation queries for shard: {message.shard_id} - size: {len(raw_message)}")
-                    for table in message.shard_query_list:
-                        logger.info(msg=f"Executing shard generation query for table: '{table.table_name}' -> \n{table.query}")
-                        db_connection.execute(query=table.query)
-                        logger.info(msg=f"created table: {table.table_name}")
-
-                    logger.info(msg="Running VACUUM ANALYZE")
-                    db_connection.execute(query="VACUUM ANALYZE")
-
-                    logger.info(msg="All datasets from server created")
-
-                    shard_confirmed_dict = dict(kind="ShardConfirmation", shard_id=message.shard_id, successful=True)
-                    await websocket.send(json.dumps(shard_confirmed_dict).encode())
-                    logger.info(msg=f"Sent confirmation to server that worker: '{WORKER.worker_id}' is ready.")
-                    WORKER.ready = True
+                    await build_shard_datasets(db_connection, message, raw_message, websocket)
             elif isinstance(raw_message, str):
                 logger.info(msg=f"Message from server: {raw_message}")
                 message = munchify(x=json.loads(raw_message))
@@ -96,6 +105,9 @@ async def worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping
                                 await websocket.send(json.dumps(result_dict).encode())
                 elif message.kind == "Error":
                     logger.error(msg=f"Server sent an error: {message.error_message}")
+
+
+
 
 
 @click.command()

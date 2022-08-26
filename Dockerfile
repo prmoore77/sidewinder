@@ -4,8 +4,7 @@ FROM --platform=linux/amd64 python:3.8
 RUN apt-get update --yes && \
     apt-get dist-upgrade --yes && \
     apt-get install --yes \
-      cmake \
-      ninja-build \
+      sleep \
       vim
 
 # Setup the AWS Client

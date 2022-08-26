@@ -46,9 +46,13 @@ server:
       memory: 64Gi
 
   nodeSelector:
-    alpha.eksctl.io/nodegroup-name: sw-cpu-node-group
+    alpha.eksctl.io/nodegroup-name: swt-cpu-node-group
 
-  tolerations: []
+  tolerations:
+    - key: sidewinder
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
 
   affinity: {}
 
@@ -89,9 +93,13 @@ worker:
       memory: 32Gi
 
   nodeSelector:
-    alpha.eksctl.io/nodegroup-name: sw-cpu-node-group
+    alpha.eksctl.io/nodegroup-name: swt-cpu-node-group
 
-  tolerations: []
+  tolerations:
+    - key: sidewinder
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
 
   affinity: {}
 
@@ -134,8 +142,12 @@ client:
       memory: 2Gi
 
   nodeSelector:
-    alpha.eksctl.io/nodegroup-name: sw-cpu-node-group
+    alpha.eksctl.io/nodegroup-name: swt-cpu-node-group
 
-  tolerations: []
+  tolerations:
+    - key: sidewinder
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
 
   affinity: {}
