@@ -37,7 +37,6 @@ spec:
           volumeMounts:
             - name: local-volume
               mountPath: /home/app_user/data
-              readOnly: true
           env:
             - name: SERVER_URL
               value: ws://{{ include "sidewinder.fullname" . }}:{{ .Values.server.service.port }}/worker
