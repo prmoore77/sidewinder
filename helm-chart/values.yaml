@@ -4,8 +4,8 @@
 
 server:
   config:
-    shardCount: 11
-    tpchScale: 100
+    shardCount: 110
+    tpchScale: 1000
     pingTimeout: 900
 
   replicaCount: 1

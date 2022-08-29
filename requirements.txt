@@ -1,9 +1,9 @@
 click==8.1.*
-duckdb==v0.4.1-dev1956
+duckdb==v0.4.1-dev2348
 duckdb-engine==0.2.*
 websockets==10.3.*
 munch==2.5.*
-pyarrow==8.0.*
+pyarrow==9.0.*
 pyyaml==6.*
 pglast==3.*
 pandas==1.4.*
