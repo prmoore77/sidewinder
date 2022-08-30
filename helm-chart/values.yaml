@@ -4,7 +4,7 @@
 
 server:
   config:
-    shardCount: 110
+    shardCount: 111
     tpchScale: 1000
     pingTimeout: 900
 
@@ -39,11 +39,11 @@ server:
 
   resources:
     limits:
-      cpu: 16
-      memory: 64Gi
+      cpu: 48
+      memory: 192Gi
     requests:
-      cpu: 16
-      memory: 64Gi
+      cpu: 48
+      memory: 192Gi
 
   nodeSelector:
     alpha.eksctl.io/nodegroup-name: swt-cpu-node-group
@@ -86,11 +86,11 @@ worker:
 
   resources:
     limits:
-      cpu: 8
-      memory: 32Gi
+      cpu: 16
+      memory: 64Gi
     requests:
-      cpu: 8
-      memory: 32Gi
+      cpu: 16
+      memory: 64Gi
 
   nodeSelector:
     alpha.eksctl.io/nodegroup-name: swt-cpu-node-group
