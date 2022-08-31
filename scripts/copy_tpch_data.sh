@@ -19,4 +19,4 @@ echo "TPCH_SCALE_FACTOR=${TPCH_SCALE_FACTOR}"
 
 DATA_DIR="${SCRIPT_DIR}/../data/tpch_${TPCH_SCALE_FACTOR}"
 mkdir -p "${DATA_DIR}"
-aws s3 sync s3://voltrondata-tpch/${TPCH_SCALE_FACTOR}/parquet/ "${DATA_DIR}" --recursive
+aws s3 sync s3://voltrondata-tpch/${TPCH_SCALE_FACTOR}/parquet/ "${DATA_DIR}"

@@ -20,17 +20,3 @@ ORDER BY supplier_cnt DESC,
          p_type,
          p_size
 ;
-
-CREATE TABLE orders AS SELECT CAST (1 AS INTEGER) AS shard_id
-, orders.*
-FROM read_parquet('./tpch_1000/orders/orders.*.parquet') AS orders
-WHERE mod (abs (hash (o_custkey)), 111) + 1 = 1;
-select count(*) from orders;
-
-
-CREATE TEMPORARY TABLE lineitem AS
-SELECT *
-FROM read_parquet('./tpch_1000/lineitem/lineitem.*.parquet')
-WHERE l_orderkey IN (SELECT o_orderkey
-FROM orders
-);

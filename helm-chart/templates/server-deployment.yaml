@@ -23,30 +23,25 @@ spec:
         - name: efs-volume
           persistentVolumeClaim:
             claimName: {{ include "sidewinder.fullname" . }}-efs-volume-claim
-#        - name: local-volume
-#          persistentVolumeClaim:
-#            claimName: {{ include "sidewinder.fullname" . }}-local-volume-claim
+        - name: local-volume
+          persistentVolumeClaim:
+            claimName: {{ include "sidewinder.fullname" . }}-local-volume-claim
       {{- with .Values.server.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext:
         {{- toYaml .Values.server.podSecurityContext | nindent 8 }}
-#      initContainers:
-#        - name: volume-mount-hack
-#          image: busybox
-#          command: [ "sh", "-c", "chmod -R 777 /data" ]
-#          volumeMounts:
-#            - name: local-volume
-#              mountPath: /data
       containers:
         - name: {{ .Chart.Name }}
           command: [ "/bin/bash" ]
-          # args: [ "-c", "sleep infinity" ]
-          args: [ "-c", "python -m server" ]
+          args: [ "-c", "sleep infinity" ]
+          # args: [ "-c", "python -m server" ]
           volumeMounts:
             - name: efs-volume
               mountPath: /home/app_user/data
+            - name: local-volume
+              mountPath: /home/app_user/local_data
           env:
             - name: DATABASE_FILE
               value: /home/app_user/data/tpch_{{ .Values.server.config.tpchScale }}.db

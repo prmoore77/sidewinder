@@ -6,7 +6,7 @@ metadata:
     "helm.sh/resource-policy": keep
 spec:
   storageClassName: local-storage
-  volumeName: local-pv-11949880
+  volumeName: local-pv-ef3ec18d
   accessModes:
   - ReadWriteOnce
   resources:

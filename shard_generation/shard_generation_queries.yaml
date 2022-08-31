@@ -1,17 +1,31 @@
 tables:
-  - name: lineitem
-    parent_table_name: ''
-    query_template: |-
-      SELECT * 
-        FROM read_parquet('{data_path}/lineitem/lineitem.*.parquet')
-       WHERE mod (abs (hash (l_partkey)), {overall_shard_count}) + 1 = {shard_id}
   - name: orders
-    parent_table_name: lineitem
+    parent_table_name: ''
     query_template: |-
       SELECT CAST ({shard_id} AS INTEGER) AS shard_id
            , orders.* 
         FROM read_parquet('{data_path}/orders/orders.*.parquet') AS orders
-       WHERE o_orderkey IN (SELECT DISTINCT l_orderkey
+       WHERE mod (abs (hash (o_custkey)), {overall_shard_count}) + 1 = {shard_id}
+  - name: lineitem
+    parent_table_name: orders
+    query_template: |-
+      SELECT l_orderkey
+           , l_partkey
+           , l_suppkey
+           , l_linenumber
+           , l_quantity
+           , l_extendedprice
+           , l_discount
+           , l_tax
+           , l_returnflag
+           , l_linestatus
+           , l_shipdate
+           , l_commitdate
+           , l_receiptdate
+           , l_shipinstruct
+           , l_shipmode 
+        FROM read_parquet('{data_path}/lineitem/lineitem.*.parquet')
+       WHERE l_orderkey IN (SELECT DISTINCT o_orderkey
                               FROM {parent_table_dataset}
                            )
   - name: customer
@@ -43,7 +57,10 @@ tables:
   - name: partsupp
     parent_table_name: part
     query_template: |-
-      SELECT *
+      SELECT ps_partkey
+           , ps_suppkey
+           , ps_availqty
+           , ps_supplycost
         FROM read_parquet('{data_path}/partsupp/partsupp.*.parquet')
        WHERE ps_partkey IN (SELECT DISTINCT p_partkey
                               FROM {parent_table_dataset}
