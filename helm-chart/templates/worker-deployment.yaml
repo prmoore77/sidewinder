@@ -19,10 +19,6 @@ spec:
       labels:
         {{- include "sidewinder.selectorLabels" . | nindent 8 }}
     spec:
-      volumes:
-        - name: local-volume
-          persistentVolumeClaim:
-            claimName: {{ include "sidewinder.fullname" . }}-local-volume-claim
       {{- with .Values.worker.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -34,38 +30,9 @@ spec:
           command: [ "/bin/bash" ]
           # args: [ "-c", "sleep infinity" ]
           args: [ "-c", "python -m worker" ]
-          volumeMounts:
-            - name: local-volume
-              mountPath: /home/app_user/data
           env:
             - name: SERVER_URL
               value: ws://{{ include "sidewinder.fullname" . }}:{{ .Values.server.service.port }}/worker
-            - name: LOAD_DUCKDB_S3_EXTENSION
-              value: "False"
-            - name: S3_ACCESS_KEY_ID
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "sidewinder.fullname" . }}-secret
-                  key: S3_ACCESS_KEY_ID
-                  optional: false
-            - name: S3_REGION
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "sidewinder.fullname" . }}-secret
-                  key: S3_REGION
-                  optional: false
-            - name: S3_SECRET_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "sidewinder.fullname" . }}-secret
-                  key: S3_SECRET_ACCESS_KEY
-                  optional: false
-            - name: S3_SESSION_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "sidewinder.fullname" . }}-secret
-                  key: S3_SESSION_TOKEN
-                  optional: false
           securityContext:
             {{- toYaml .Values.worker.securityContext | nindent 12 }}
           image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag | default .Chart.AppVersion }}"
