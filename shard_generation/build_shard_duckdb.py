@@ -8,6 +8,10 @@ import os
 from utils import get_cpu_count, get_memory_limit
 from config import logger
 import shutil
+import tarfile
+import boto3
+import re
+
 
 TIMER_TEXT = "{name}: Elapsed time: {:.4f} seconds"
 
@@ -38,40 +42,63 @@ def generate_shard_query_list(data_path: str,
     return shard_query_list
 
 
+def copy_shard_file(src: str, dst: str):
+    with Timer(name=f"Copying file: '{src}' to: '{dst}'", text=TIMER_TEXT):
+        if re.search(pattern="^s3://", string=dst):
+            s3_client = boto3.client('s3')
+            bucket_name = dst.split("/")[2]
+            dest_file_path = "/".join(dst.split("/")[3:])
+
+            s3_client.upload_file(src, bucket_name, dest_file_path)
+        else:
+            # Copy the output database file...
+            shutil.copy(src=src, dst=dst)
+
+
 def build_shard(shard_id: int,
                 source_data_path: str,
                 output_data_path: str,
                 overall_shard_count: int,
                 duckdb_threads: int,
-                duckdb_memory_limit: int
+                duckdb_memory_limit: int,
+                working_temporary_dir: str
                 ):
     with Timer(name=f"\nBuild Shard ID: {shard_id}", text=TIMER_TEXT):
+        shard_name = f"shard_{shard_id}_of_{overall_shard_count}"
+
         shard_query_list = generate_shard_query_list(data_path=source_data_path,
                                                      shard_count=overall_shard_count,
                                                      shard_id=shard_id
                                                      )
 
-        with TemporaryDirectory(dir=output_data_path) as output_dir:
-            database_file = os.path.join(output_dir, f"shard_{shard_id}_of_{overall_shard_count}.db")
-            logger.info(msg=f"Creating new database file: {database_file}")
+        db_connection = duckdb.connect(database=":memory:")
 
-            db_connection = duckdb.connect(database=database_file,
-                                           read_only=False
-                                           )
-            db_connection.execute(query=f"PRAGMA threads={duckdb_threads}")
-            db_connection.execute(query=f"PRAGMA memory_limit='{duckdb_memory_limit}b'")
+        db_connection.execute(query=f"PRAGMA threads={duckdb_threads}")
+        db_connection.execute(query=f"PRAGMA memory_limit='{duckdb_memory_limit}b'")
 
-            for shard_query in shard_query_list:
-                with Timer(name=f"Creating table: {shard_query.table_name} - running SQL: {shard_query.query}", text=TIMER_TEXT):
-                    db_connection.execute(query=shard_query.query)
+        for shard_query in shard_query_list:
+            with Timer(name=f"Creating table: {shard_query.table_name} - running SQL: {shard_query.query}", text=TIMER_TEXT):
+                db_connection.execute(query=shard_query.query)
 
-            with Timer(name="Running VACUUM ANALYZE", text=TIMER_TEXT):
-                db_connection.execute(query="VACUUM ANALYZE")
+        with Timer(name="Running VACUUM ANALYZE", text=TIMER_TEXT):
+            db_connection.execute(query="VACUUM ANALYZE")
+
+        with TemporaryDirectory(dir=working_temporary_dir) as output_dir:
+            database_directory = os.path.join(output_dir, shard_name)
+            with Timer(name=f"Exporting Database to parquet - directory: '{database_directory}'", text=TIMER_TEXT):
+                db_connection.execute(f"EXPORT DATABASE '{database_directory}' (FORMAT PARQUET)")
 
             db_connection.close()
 
+            tarfile_base_name = f"{shard_name}.tar.gz"
+            tarfile_name = os.path.join(output_dir, tarfile_base_name)
+
+            with Timer(name=f"Creating tar.gz file: '{tarfile_name}' - from directory: '{database_directory}'", text=TIMER_TEXT):
+                with tarfile.open(tarfile_name, "w:gz") as tar:
+                    tar.add(database_directory, arcname=os.path.basename(database_directory))
+
             # Copy the output database file...
-            shutil.copy(src=database_file, dst=output_data_path)
+            copy_shard_file(src=tarfile_name, dst=os.path.join(output_data_path, tarfile_base_name))
 
 
 @click.command()
@@ -81,6 +108,19 @@ def build_shard(shard_id: int,
     default=os.getenv("SHARD_COUNT"),
     required=True,
     help="How many shards to generate."
+)
+@click.option(
+    "--min-shard",
+    type=int,
+    default=1,
+    required=True,
+    help="Minimum shard ID to generate."
+)
+@click.option(
+    "--max-shard",
+    type=int,
+    default=None,
+    help="Maximum shard ID to generate."
 )
 @click.option(
     "--source-data-path",
@@ -110,30 +150,51 @@ def build_shard(shard_id: int,
     show_default=True,
     help="The amount of memory to allocate to DuckDB - default is to use 75% of physical memory available."
 )
+@click.option(
+    "--working-temporary-dir",
+    type=str,
+    default="/tmp",
+    required=True,
+    help="The working temporary directory (use nvme for speed)"
+)
 def main(shard_count: int,
+         min_shard: int,
+         max_shard: int,
          source_data_path: str,
          output_data_path: str,
          duckdb_threads: int,
-         duckdb_memory_limit: int
+         duckdb_memory_limit: int,
+         working_temporary_dir: str
          ):
+
     with Timer(name="\nOverall program", text=TIMER_TEXT):
         logger.info(msg=(f"Running shard generation - (using: "
                          f"--shard-count={shard_count} "
+                         f"--min-shard={min_shard} "
+                         f"--max-shard={max_shard} "
                          f"--source-data-path='{source_data_path}' "
                          f"--output-data-path='{output_data_path}' "
                          f"--duckdb-threads={duckdb_threads} "
-                         f"--duckdb-memory-limit={duckdb_memory_limit}"
+                         f"--duckdb-memory-limit={duckdb_memory_limit} "
+                         f"--working-temporary-dir={working_temporary_dir}"
                          )
                     )
-        for shard_id in range(1, shard_count + 1):
+        assert max_shard is None or max_shard < shard_count
+
+        for shard_id in range(min_shard, (max_shard or shard_count) + 1):
             build_shard(shard_id=shard_id,
                         source_data_path=source_data_path,
                         output_data_path=output_data_path,
                         overall_shard_count=shard_count,
                         duckdb_threads=duckdb_threads,
-                        duckdb_memory_limit=duckdb_memory_limit
+                        duckdb_memory_limit=duckdb_memory_limit,
+                        working_temporary_dir=working_temporary_dir
                         )
 
 
 if __name__ == "__main__":
     main()
+
+
+# Example call:
+# python -m build_shard_duckdb --shard-count=101 --min-shard=1 --max-shard=10 --source-data-path="/home/app_user/local_data/tpch_1000" --output-data-path="s3://voltrondata-sidewinder/shards/tpch/1000" --working-temporary-dir="/home/app_user/local_data"
