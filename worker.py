@@ -64,7 +64,7 @@ async def copy_database_file(source_path: str, target_path: str) -> str:
 
 
 async def build_database_from_tarfile(tarfile_path: str, local_database_dir: str):
-    # Un-tar the database .tar.gz file...
+    logger.info(msg=f"Extract tarfile: '{tarfile_path}' contents to directory: '{local_database_dir}'")
     with tarfile.open(name=tarfile_path) as tar:
         database_dir_name = tar.getmembers()[0].name
         tar.extractall(path=local_database_dir)
@@ -79,9 +79,13 @@ async def build_database_from_tarfile(tarfile_path: str, local_database_dir: str
         if re.search(pattern="\.parquet$", string=file):
             file_full_path = os.path.join(database_full_path, file)
             table_name = file.split(".")[0]
-            db_connection.execute(query=f"CREATE VIEW {table_name} AS "
-                                        f"SELECT * FROM read_parquet('{file_full_path}')"
-                                  )
+            sql_text = (f"CREATE VIEW {table_name} AS "
+                        f"SELECT * FROM read_parquet('{file_full_path}')"
+                        )
+            logger.info(msg=f"Executing SQL: '{sql_text}'")
+            db_connection.execute(query=sql_text)
+
+    logger.info(msg=f"Successfully opened Database in DuckDB")
 
     return db_connection
 
@@ -119,7 +123,7 @@ async def worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping
                 )
     logger.info(f"Using DuckDB version: {duckdb.__version__}")
 
-    with TemporaryDirectory() as local_database_dir:
+    with TemporaryDirectory(dir="/tmp") as local_database_dir:
         async with websockets.connect(uri=server_uri,
                                       extra_headers=dict(),
                                       max_size=1024 ** 3,

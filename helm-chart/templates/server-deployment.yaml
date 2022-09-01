@@ -35,8 +35,8 @@ spec:
       containers:
         - name: {{ .Chart.Name }}
           command: [ "/bin/bash" ]
-          args: [ "-c", "sleep infinity" ]
-          # args: [ "-c", "python -m server" ]
+          # args: [ "-c", "sleep infinity" ]
+          args: [ "-c", "python -m server" ]
           volumeMounts:
             - name: efs-volume
               mountPath: /home/app_user/data
@@ -44,7 +44,7 @@ spec:
               mountPath: /home/app_user/local_data
           env:
             - name: DATABASE_FILE
-              value: /home/app_user/data/tpch_{{ .Values.server.config.tpchScale }}.db
+              value: /home/app_user/local_data/tpch_{{ .Values.server.config.tpchScale }}.db
             - name: SHARD_DATA_PATH
               value: s3://voltrondata-sidewinder/shards/tpch/{{ .Values.server.config.tpchScale }}
             - name: PING_TIMEOUT
