@@ -25,8 +25,25 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml .Values.worker.podSecurityContext | nindent 8 }}
+      volumes:
+        - name: nvme-volume
+          hostPath:
+            # directory location on host
+            path: /nvme/disk
+            # this field is optional
+            type: Directory
+      initContainers:
+        - name: volume-mount-hack
+          image: busybox
+          command: [ "sh", "-c", "chmod 777 /data" ]
+          volumeMounts:
+            - name: nvme-volume
+              mountPath: /data
       containers:
         - name: {{ .Chart.Name }}
+          volumeMounts:
+            - mountPath: /tmp
+              name: nvme-volume
           command: [ "/bin/bash" ]
           # args: [ "-c", "sleep infinity" ]
           args: [ "-c", "python -m worker" ]
