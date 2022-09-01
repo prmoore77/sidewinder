@@ -96,7 +96,7 @@ async def run_query_on_server(query, sql_client_connection, loop, process_pool, 
 
 async def set_client_attribute(sql_client_websocket, message):
     try:
-        match = re.search('^\.set (\S+)\s*=\s*(\S+)\s*$', message.rstrip(' ;/'))
+        match = re.search(pattern='^\.set (\S+)\s*=\s*(\S+)\s*$', string=message.rstrip(' ;/'))
         setting = match[1]
         value = match[2].upper()
 
@@ -123,7 +123,7 @@ async def process_client_commands(sql_client_websocket, loop, process_pool, data
             if message:
                 logger.info(msg=f"Message received from SQL client: '{sql_client_websocket.id}' - '{message}'")
 
-                if re.search('^\.set ', message):
+                if re.search(pattern='^\.set ', string=message):
                     await set_client_attribute(sql_client_websocket, message)
                 else:
                     query_id = str(uuid.uuid4())
@@ -350,7 +350,7 @@ async def get_files(shard_data_path):
 
 
 async def get_shards(shard_data_path):
-    if re.search("^s3://", shard_data_path):
+    if re.search(pattern="^s3://", string=shard_data_path):
         shard_files = await get_s3_files(shard_data_path=shard_data_path)
     else:
         shard_files = await get_files(shard_data_path=shard_data_path)
