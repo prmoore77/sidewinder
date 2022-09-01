@@ -1,5 +1,5 @@
 click==8.1.*
-duckdb==v0.4.1-dev2356
+duckdb==v0.4.1-dev2374
 duckdb-engine==0.2.*
 websockets==10.3.*
 munch==2.5.*
@@ -11,3 +11,4 @@ sqlparse==0.4.*
 psutil==5.9.*
 boto3==1.24.*
 codetiming==1.3.*
+pigz_python==1.0.*

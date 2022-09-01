@@ -1,3 +1,4 @@
+
 from codetiming import Timer
 from munch import munchify, Munch
 from tempfile import TemporaryDirectory
@@ -11,6 +12,7 @@ import shutil
 import tarfile
 import boto3
 import re
+from pigz_python import PigzFile
 
 
 TIMER_TEXT = "{name}: Elapsed time: {:.4f} seconds"
@@ -90,15 +92,21 @@ def build_shard(shard_id: int,
 
             db_connection.close()
 
-            tarfile_base_name = f"{shard_name}.tar.gz"
+            tarfile_base_name = f"{shard_name}.tar"
             tarfile_name = os.path.join(output_dir, tarfile_base_name)
 
-            with Timer(name=f"Creating tar.gz file: '{tarfile_name}' - from directory: '{database_directory}'", text=TIMER_TEXT):
-                with tarfile.open(tarfile_name, "w:gz") as tar:
+            with Timer(name=f"Creating tar file: '{tarfile_name}' - from directory: '{database_directory}'", text=TIMER_TEXT):
+                with tarfile.open(tarfile_name, "w:") as tar:
                     tar.add(database_directory, arcname=os.path.basename(database_directory))
 
+            with Timer(name=f"Compressing tar file: '{tarfile_name}'", text=TIMER_TEXT):
+                pigz_file = PigzFile(compression_target=tarfile_name, workers=duckdb_threads)
+                pigz_file.process_compression_target()
+
             # Copy the output database file...
-            copy_shard_file(src=tarfile_name, dst=os.path.join(output_data_path, tarfile_base_name))
+            copy_shard_file(src=os.path.join(pigz_file.compression_target.parent, pigz_file.output_filename),
+                            dst=os.path.join(output_data_path, pigz_file.output_filename)
+                            )
 
 
 @click.command()
@@ -197,4 +205,4 @@ if __name__ == "__main__":
 
 
 # Example call:
-# python -m build_shard_duckdb --shard-count=101 --min-shard=1 --max-shard=10 --source-data-path="/home/app_user/local_data/tpch_1000" --output-data-path="s3://voltrondata-sidewinder/shards/tpch/1000" --working-temporary-dir="/home/app_user/local_data"
+# python -m build_shard_duckdb --shard-count=101 --min-shard=92 --max-shard=94 --source-data-path="/home/app_user/local_data/tpch_1000" --output-data-path="s3://voltrondata-sidewinder/shards/tpch/1000" --working-temporary-dir="/home/app_user/local_data"
