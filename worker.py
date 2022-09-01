@@ -15,6 +15,7 @@ import re
 from tempfile import TemporaryDirectory
 import shutil
 import boto3
+import tarfile
 
 
 # Constants
@@ -62,20 +63,42 @@ async def copy_database_file(source_path: str, target_path: str) -> str:
     return local_database_file_name
 
 
+async def build_database_from_tarfile(tarfile_path: str, local_database_dir: str):
+    # Un-tar the database .tar.gz file...
+    with tarfile.open(name=tarfile_path) as tar:
+        database_dir_name = tar.getmembers()[0].name
+        tar.extractall(path=local_database_dir)
+
+    database_full_path = os.path.join(local_database_dir, database_dir_name)
+
+    database_dir_file_list = os.listdir(path=database_full_path)
+
+    db_connection = duckdb.connect(database=":memory:")
+
+    for file in database_dir_file_list:
+        if re.search(pattern="\.parquet$", string=file):
+            file_full_path = os.path.join(database_full_path, file)
+            table_name = file.split(".")[0]
+            db_connection.execute(query=f"CREATE VIEW {table_name} AS "
+                                        f"SELECT * FROM read_parquet('{file_full_path}')"
+                                  )
+
+    return db_connection
+
+
 async def get_shard_database(message, websocket, local_database_dir, duckdb_threads, duckdb_memory_limit):
     WORKER.worker_id = message.worker_id
     logger.info(msg=f"Worker ID is: '{WORKER.worker_id}'")
     logger.info(msg=f"Received shard information for shard: '{message.shard_id}'")
 
     # Get/copy the shard database file...
-    local_shard_database_file_name = await copy_database_file(source_path=message.shard_file_name, target_path=local_database_dir)
+    local_shard_database_file_name = await copy_database_file(source_path=message.shard_file_name,
+                                                              target_path=local_database_dir
+                                                              )
 
-    try:
-        db_connection = duckdb.connect(database=local_shard_database_file_name)
-    except Exception as e:
-        raise
-    else:
-        logger.info(msg=f"DuckDB Successfully opened database file: '{local_shard_database_file_name}'")
+    db_connection = await build_database_from_tarfile(tarfile_path=local_shard_database_file_name,
+                                                      local_database_dir=local_database_dir
+                                                      )
 
     db_connection.execute(query=f"PRAGMA threads={duckdb_threads}")
     db_connection.execute(query=f"PRAGMA memory_limit='{duckdb_memory_limit}b'")
