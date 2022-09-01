@@ -332,7 +332,7 @@ async def get_s3_files(shard_data_path):
     s3_files = []
     for file in files:
         file_name = file['Key']
-        if file_path in file_name:
+        if file_path in file_name and re.search(pattern="\.tar.gz$", string=file_name):
             s3_files.append(f"s3://{bucket_name}/{file_name}")
 
     return s3_files
@@ -343,7 +343,8 @@ async def get_files(shard_data_path):
 
     files = []
     for file in dir_list:
-        files.append(os.path.join(shard_data_path, file))
+        if re.search(pattern="\.tar.gz$", string=file):
+            files.append(os.path.join(shard_data_path, file))
 
     return files
 
