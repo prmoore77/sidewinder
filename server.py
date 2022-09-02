@@ -5,6 +5,7 @@ import json
 import os
 import re
 import uuid
+from uuid import UUID
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from datetime import datetime
 
@@ -219,7 +220,7 @@ class SidewinderQuery:
                  sql: str,
                  client: SidewinderSQLClient,
                  ):
-        self.query_id = str(uuid.uuid4())
+        self.query_id = uuid.uuid4()
         self.sql = sql
         self.client = client
         self._parse()
@@ -236,6 +237,8 @@ class SidewinderQuery:
             self.status = STARTED
         elif self.error_message:
             self.status = FAILED
+
+        self.error_message = None
 
     def _parse(self):
         try:
@@ -282,7 +285,7 @@ class SidewinderQuery:
             await self.send_results_to_client(result_bytes)
 
     @property
-    async def json(self):
+    async def worker_message_json(self):
         return json.dumps(Munch(kind="Query",
                                 query_id=str(self.query_id),
                                 sql_client_id=str(self.client.sql_client_id),
@@ -295,7 +298,7 @@ class SidewinderQuery:
     async def distribute_to_workers(self):
         for worker_id, worker in self.client.server.worker_connections.items():
             if worker.ready:
-                await worker.websocket_connection.send(await self.json)
+                await worker.websocket_connection.send(await self.worker_message_json)
                 self.workers[worker_id] = Munch(worker=worker_id, results=None)
 
         self.status = DISTRIBUTED
@@ -359,6 +362,12 @@ class SidewinderWorker:
             logger.info(
                 msg=f"Worker Websocket connection: '{self.websocket_connection.id}' - connected")
 
+            await self.websocket_connection.send(json.dumps(dict(kind="Info",
+                                                                 text=f"Sidewinder Server - version: {self.server.version}"
+                                                                 )
+                                                            )
+                                                 )
+
             logger.info(
                 msg=f"Sending info for shard: '{self.shard.shard_id}' ({self.shard}) to worker: '{self.worker_id}'...")
 
@@ -383,7 +392,7 @@ class SidewinderWorker:
         self.ready = True
 
     async def process_worker_result(self, worker_message: Munch):
-        query: SidewinderQuery = self.server.queries[worker_message.query_id]
+        query: SidewinderQuery = self.server.queries[UUID(worker_message.query_id)]
         if worker_message.status == WORKER_FAILED:
             if not query.response_sent_to_client:
                 await query.client.websocket_connection.send(
