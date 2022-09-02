@@ -1,175 +1,170 @@
-import asyncio
 import websockets
 import click
 
-from utils import get_dataframe_results_as_base64_str, get_cpu_count, get_memory_limit
+from utils import coro, get_dataframe_results_as_base64_str, get_cpu_count, get_memory_limit, copy_database_file
 from config import logger
 import json
 import duckdb
-import pyarrow
-import base64
 from munch import Munch, munchify
 import os
-import psutil
 import re
 from tempfile import TemporaryDirectory
-import shutil
-import boto3
 import tarfile
-
 
 # Constants
 SUCCESS = "SUCCESS"
 FAILED = "FAILED"
 CTAS_RETRY_LIMIT = 3
-
-# Global
-WORKER = Munch(worker_id=None, ready=False)
-
-
-async def create_table(db_connection, table):
-    logger.info(msg=f"Executing shard generation query for table: '{table.table_name}' -> \n{table.query}")
-
-    db_connection.execute(query=table.query)
-
-    logger.info(msg=f"created table: {table.table_name}")
+SIDEWINDER_WORKER_VERSION = "0.0.1"
+DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE = 1024 ** 3
 
 
-async def download_s3_file(src: str, dst: str):
-    s3_client = boto3.client("s3")
+class Worker:
+    def __init__(self,
+                 server_uri: str,
+                 duckdb_threads: int,
+                 duckdb_memory_limit: int,
+                 websocket_ping_timeout: int,
+                 max_websocket_message_size: int
+                 ):
+        self.server_uri = server_uri
+        self.duckdb_threads = duckdb_threads
+        self.duckdb_memory_limit = duckdb_memory_limit
+        self.websocket_ping_timeout = websocket_ping_timeout
+        self.max_websocket_message_size = max_websocket_message_size
 
-    bucket_name = src.split("/")[2]
-    source_file_path = "/".join(src.split("/")[3:])
+        self.worker_id = None
+        self.shard_id = None
+        self.ready = False
+        self.local_database_dir = None
+        self.local_shard_database_file_name = None
+        self.db_connection = None
 
-    logger.info(msg=f"Downloading S3 file: '{src}' - to path: '{dst}'")
-    try:
-        s3_client.download_file(bucket_name, source_file_path, dst)
-    except Exception as e:
-        raise
-    else:
-        logger.info(msg=f"Successfully downloaded S3 file: '{src}' to destination: '{dst}'")
+        self.version = SIDEWINDER_WORKER_VERSION
 
+    async def build_database_from_tarfile(self,
+                                          tarfile_path: str
+                                          ):
+        logger.info(msg=f"Extract tarfile: '{tarfile_path}' contents to directory: '{self.local_database_dir}'")
+        with tarfile.open(name=tarfile_path) as tar:
+            database_dir_name = tar.getmembers()[0].name
+            tar.extractall(path=self.local_database_dir)
 
-async def copy_database_file(source_path: str, target_path: str) -> str:
-    target_file_name = source_path.split("/")[-1]
-    local_database_file_name = os.path.join(target_path, target_file_name)
+        database_full_path = os.path.join(self.local_database_dir, database_dir_name)
 
-    if re.search("^s3://", source_path):
-        await download_s3_file(src=source_path, dst=local_database_file_name)
-    else:
-        shutil.copy(src=source_path, dst=local_database_file_name)
+        database_dir_file_list = os.listdir(path=database_full_path)
 
-    logger.info(msg=f"Successfully copied database file: '{source_path}' to path: '{local_database_file_name}'")
-    return local_database_file_name
+        db_connection = duckdb.connect(database=":memory:")
 
+        for file in database_dir_file_list:
+            if re.search(pattern="\.parquet$", string=file):
+                file_full_path = os.path.join(database_full_path, file)
+                table_name = file.split(".")[0]
+                sql_text = (f"CREATE VIEW {table_name} AS "
+                            f"SELECT * FROM read_parquet('{file_full_path}')"
+                            )
+                logger.info(msg=f"Executing SQL: '{sql_text}'")
+                db_connection.execute(query=sql_text)
 
-async def build_database_from_tarfile(tarfile_path: str, local_database_dir: str):
-    logger.info(msg=f"Extract tarfile: '{tarfile_path}' contents to directory: '{local_database_dir}'")
-    with tarfile.open(name=tarfile_path) as tar:
-        database_dir_name = tar.getmembers()[0].name
-        tar.extractall(path=local_database_dir)
+        logger.info(msg=f"Successfully opened Database in DuckDB")
 
-    database_full_path = os.path.join(local_database_dir, database_dir_name)
+        return db_connection
 
-    database_dir_file_list = os.listdir(path=database_full_path)
+    async def get_shard_database(self,
+                                 message: Munch
+                                 ):
+        self.worker_id = message.worker_id
+        logger.info(msg=f"Worker ID is: '{self.worker_id}'")
+        self.shard_id = message.shard_id
+        logger.info(msg=f"Received shard information for shard: '{self.shard_id}'")
 
-    db_connection = duckdb.connect(database=":memory:")
+        # Get/copy the shard database file...
+        self.local_shard_database_file_name = await copy_database_file(source_path=message.shard_file_name,
+                                                                       target_path=self.local_database_dir
+                                                                       )
 
-    for file in database_dir_file_list:
-        if re.search(pattern="\.parquet$", string=file):
-            file_full_path = os.path.join(database_full_path, file)
-            table_name = file.split(".")[0]
-            sql_text = (f"CREATE VIEW {table_name} AS "
-                        f"SELECT * FROM read_parquet('{file_full_path}')"
-                        )
-            logger.info(msg=f"Executing SQL: '{sql_text}'")
-            db_connection.execute(query=sql_text)
+        db_connection = await self.build_database_from_tarfile(tarfile_path=self.local_shard_database_file_name)
 
-    logger.info(msg=f"Successfully opened Database in DuckDB")
+        db_connection.execute(query=f"PRAGMA threads={self.duckdb_threads}")
+        db_connection.execute(query=f"PRAGMA memory_limit='{self.duckdb_memory_limit}b'")
 
-    return db_connection
+        shard_confirmed_dict = dict(kind="ShardConfirmation",
+                                    shard_id=self.shard_id,
+                                    successful=True
+                                    )
+        await self.websocket.send(json.dumps(shard_confirmed_dict).encode())
+        logger.info(msg=f"Sent confirmation to server that worker: '{self.worker_id}' is ready.")
+        self.ready = True
 
+        return db_connection
 
-async def get_shard_database(message, websocket, local_database_dir, duckdb_threads, duckdb_memory_limit):
-    WORKER.worker_id = message.worker_id
-    logger.info(msg=f"Worker ID is: '{WORKER.worker_id}'")
-    logger.info(msg=f"Received shard information for shard: '{message.shard_id}'")
+    async def run(self):
+        logger.info(msg=(f"Starting Sidewinder Worker - version: {self.version} - (\n"
+                         f" duckdb_threads: {self.duckdb_threads},\n"
+                         f" duckdb_memory_limit: {self.duckdb_memory_limit}b,\n"
+                         f" websocket ping timeout: {self.websocket_ping_timeout},\n"
+                         f" max_websocket_message_size: {self.max_websocket_message_size}"
+                         )
+                    )
+        logger.info(f"Using DuckDB version: {duckdb.__version__}")
 
-    # Get/copy the shard database file...
-    local_shard_database_file_name = await copy_database_file(source_path=message.shard_file_name,
-                                                              target_path=local_database_dir
-                                                              )
+        with TemporaryDirectory(dir="/tmp") as self.local_database_dir:
+            async with websockets.connect(uri=self.server_uri,
+                                          extra_headers=dict(),
+                                          max_size=self.max_websocket_message_size,
+                                          ping_timeout=self.websocket_ping_timeout
+                                          ) as self.websocket:
+                logger.info(msg=f"Successfully connected to server uri: '{self.server_uri}' - connection: '{self.websocket.id}'")
+                await self.process_server_messages()
 
-    db_connection = await build_database_from_tarfile(tarfile_path=local_shard_database_file_name,
-                                                      local_database_dir=local_database_dir
-                                                      )
+    async def process_server_messages(self):
+        logger.info(msg=f"Waiting to receive data...")
+        while True:
+            raw_message = await self.websocket.recv()
 
-    db_connection.execute(query=f"PRAGMA threads={duckdb_threads}")
-    db_connection.execute(query=f"PRAGMA memory_limit='{duckdb_memory_limit}b'")
+            if isinstance(raw_message, bytes):
+                message = munchify(x=json.loads(raw_message.decode()))
+                if message.kind == "ShardDataset":
+                    self.db_connection = await self.get_shard_database(message=message)
+            elif isinstance(raw_message, str):
+                logger.info(msg=f"Message from server: {raw_message}")
+                message = munchify(x=json.loads(raw_message))
 
-    shard_confirmed_dict = dict(kind="ShardConfirmation", shard_id=message.shard_id, successful=True)
-    await websocket.send(json.dumps(shard_confirmed_dict).encode())
-    logger.info(msg=f"Sent confirmation to server that worker: '{WORKER.worker_id}' is ready.")
-    WORKER.ready = True
+                if message.kind == "Info":
+                    logger.info(msg=f"Informational message from server: '{message.text}'")
+                elif message.kind == "Query":
+                    await self.run_query(query_message=message)
+                elif message.kind == "Error":
+                    logger.error(msg=f"Server sent an error: {message.error_message}")
 
-    return db_connection
-
-
-async def worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping_timeout):
-    logger.info(msg=(f"Starting Sidewinder Worker - (using: {duckdb_threads} DuckDB thread(s) "
-                     f"/ DuckDB memory limit: {duckdb_memory_limit}b "
-                     f"/ websocket ping timeout: {websocket_ping_timeout})"
-                     )
-                )
-    logger.info(f"Using DuckDB version: {duckdb.__version__}")
-
-    with TemporaryDirectory(dir="/tmp") as local_database_dir:
-        async with websockets.connect(uri=server_uri,
-                                      extra_headers=dict(),
-                                      max_size=1024 ** 3,
-                                      ping_timeout=websocket_ping_timeout
-                                      ) as websocket:
-            logger.info(msg=f"Successfully connected to server uri: '{server_uri}' - connection: '{websocket.id}'")
-            logger.info(msg=f"Waiting to receive data...")
-            while True:
-                raw_message = await websocket.recv()
-
-                if isinstance(raw_message, bytes):
-                    message = munchify(x=json.loads(raw_message.decode()))
-                    if message.kind == "ShardDataset":
-                        db_connection = await get_shard_database(message=message,
-                                                                 websocket=websocket,
-                                                                 local_database_dir=local_database_dir,
-                                                                 duckdb_threads=duckdb_threads,
-                                                                 duckdb_memory_limit=duckdb_memory_limit
-                                                                 )
-                elif isinstance(raw_message, str):
-                    logger.info(msg=f"Message from server: {raw_message}")
-                    message = munchify(x=json.loads(raw_message))
-
-                    if message.kind == "Query":
-                        if not WORKER.ready:
-                            logger.warning(msg=f"Query event ignored - not yet ready to accept queries...")
-                        elif WORKER.ready:
-                            sql_command = message.command.rstrip(' ;/')
-                            if sql_command:
-                                result_dict = None
-                                try:
-                                    df = db_connection.execute(sql_command).fetch_arrow_table().replace_schema_metadata(
-                                        metadata=dict(query_id=message.query_id))
-                                except Exception as e:
-                                    result_dict = dict(kind="Result", query_id=message.query_id, status=FAILED, error_message=str(e), results=None)
-                                    logger.error(msg=f"Query: {message.query_id} - Failed - error: {str(e)}")
-                                else:
-                                    result_dict = dict(kind="Result", query_id=message.query_id, status=SUCCESS, error_message=None, results=get_dataframe_results_as_base64_str(df))
-                                    logger.info(msg=f"Query: {message.query_id} - Succeeded - (row count: {df.num_rows} / size: {df.get_total_buffer_size()})")
-                                finally:
-                                    await websocket.send(json.dumps(result_dict).encode())
-                    elif message.kind == "Error":
-                        logger.error(msg=f"Server sent an error: {message.error_message}")
-
-
-
+    async def run_query(self, query_message: Munch):
+        if not self.ready:
+            logger.warning(msg=f"Query event ignored - not yet ready to accept queries...")
+        elif self.ready:
+            sql_command = query_message.command.rstrip(' ;/')
+            if sql_command:
+                result_dict = None
+                try:
+                    df = self.db_connection.execute(sql_command).fetch_arrow_table().replace_schema_metadata(
+                        metadata=dict(query_id=query_message.query_id))
+                except Exception as e:
+                    result_dict = dict(kind="Result",
+                                       query_id=query_message.query_id,
+                                       status=FAILED,
+                                       error_message=str(e),
+                                       results=None
+                                       )
+                    logger.error(msg=f"Query: {query_message.query_id} - Failed - error: {str(e)}")
+                else:
+                    result_dict = dict(kind="Result",
+                                       query_id=query_message.query_id,
+                                       status=SUCCESS,
+                                       error_message=None,
+                                       results=get_dataframe_results_as_base64_str(df)
+                                       )
+                    logger.info(msg=f"Query: {query_message.query_id} - Succeeded - (row count: {df.num_rows} / size: {df.get_total_buffer_size()})")
+                finally:
+                    await self.websocket.send(json.dumps(result_dict).encode())
 
 
 @click.command()
@@ -178,6 +173,7 @@ async def worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping
     type=str,
     default=os.getenv("SERVER_URL", "ws://localhost:8765/worker"),
     show_default=True,
+    required=True,
     help="The server URI to connect to."
 )
 @click.option(
@@ -185,6 +181,7 @@ async def worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping
     type=int,
     default=os.getenv("DUCKDB_THREADS", get_cpu_count()),
     show_default=True,
+    required=True,
     help="The number of DuckDB threads to use - default is to use all CPU threads available."
 )
 @click.option(
@@ -192,16 +189,38 @@ async def worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping
     type=int,
     default=os.getenv("DUCKDB_MEMORY_LIMIT", int(0.75 * float(get_memory_limit()))),
     show_default=True,
+    required=True,
     help="The amount of memory to allocate to DuckDB - default is to use 75% of physical memory available."
 )
 @click.option(
     "--websocket-ping-timeout",
     type=int,
     default=os.getenv("PING_TIMEOUT", 60),
+    show_default=True,
+    required=True,
     help="Web-socket ping timeout"
 )
-def main(server_uri: str, duckdb_threads: int, duckdb_memory_limit: int, websocket_ping_timeout: int):
-    asyncio.run(worker(server_uri, duckdb_threads, duckdb_memory_limit, websocket_ping_timeout))
+@click.option(
+    "--max-websocket-message-size",
+    type=int,
+    default=DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE,
+    show_default=True,
+    required=True,
+    help="Maximum Websocket message size"
+)
+@coro
+async def main(server_uri: str,
+               duckdb_threads: int,
+               duckdb_memory_limit: int,
+               websocket_ping_timeout: int,
+               max_websocket_message_size: int
+               ):
+    await Worker(server_uri=server_uri,
+                 duckdb_threads=duckdb_threads,
+                 duckdb_memory_limit=duckdb_memory_limit,
+                 websocket_ping_timeout=websocket_ping_timeout,
+                 max_websocket_message_size=max_websocket_message_size
+                 ).run()
 
 
 if __name__ == "__main__":

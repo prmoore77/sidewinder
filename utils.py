@@ -1,6 +1,10 @@
 import asyncio
 import base64
+import re
+import shutil
 from functools import wraps
+
+import boto3
 import psutil
 
 import pyarrow
@@ -99,3 +103,59 @@ def run_query(database_file, sql, duckdb_threads, duckdb_memory_limit) -> bytes:
     query_result = con.execute(sql).fetch_arrow_table()
 
     return get_dataframe_bytes(df=query_result)
+
+
+async def download_s3_file(src: str, dst: str):
+    s3_client = boto3.client("s3")
+
+    bucket_name = src.split("/")[2]
+    source_file_path = "/".join(src.split("/")[3:])
+
+    logger.info(msg=f"Downloading S3 file: '{src}' - to path: '{dst}'")
+    try:
+        s3_client.download_file(bucket_name, source_file_path, dst)
+    except Exception as e:
+        raise
+    else:
+        logger.info(msg=f"Successfully downloaded S3 file: '{src}' to destination: '{dst}'")
+
+
+async def get_s3_files(shard_data_path):
+    s3_client = boto3.client("s3")
+
+    bucket_name = shard_data_path.split("/")[2]
+    file_path = "/".join(shard_data_path.split("/")[3:])
+    response = s3_client.list_objects_v2(Bucket=bucket_name)
+    files = response.get("Contents")
+
+    s3_files = []
+    for file in files:
+        file_name = file['Key']
+        if file_path in file_name and re.search(pattern="\.tar.gz$", string=file_name):
+            s3_files.append(f"s3://{bucket_name}/{file_name}")
+
+    return s3_files
+
+
+async def get_files(shard_data_path):
+    dir_list = os.listdir(path=shard_data_path)
+
+    files = []
+    for file in dir_list:
+        if re.search(pattern="\.tar.gz$", string=file):
+            files.append(os.path.join(shard_data_path, file))
+
+    return files
+
+
+async def copy_database_file(source_path: str, target_path: str) -> str:
+    target_file_name = source_path.split("/")[-1]
+    local_database_file_name = os.path.join(target_path, target_file_name)
+
+    if re.search("^s3://", source_path):
+        await download_s3_file(src=source_path, dst=local_database_file_name)
+    else:
+        shutil.copy(src=source_path, dst=local_database_file_name)
+        logger.info(msg=f"Successfully copied database file: '{source_path}' to path: '{local_database_file_name}'")
+
+    return local_database_file_name
