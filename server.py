@@ -223,7 +223,6 @@ class SidewinderQuery:
         self.query_id = uuid.uuid4()
         self.sql = sql
         self.client = client
-        self._parse()
         self.workers = Munch()
         self.total_workers = 0
         self.completed_workers = 0
@@ -233,12 +232,15 @@ class SidewinderQuery:
         self.distribute_query = None
         self.distribute_rationale = None
 
+        self.parsed_successfully = None
+        self.parsed_query = None
+        self.error_message = None
+        self._parse()
+
         if self.parsed_query:
             self.status = STARTED
         elif self.error_message:
             self.status = FAILED
-
-        self.error_message = None
 
     def _parse(self):
         try:
