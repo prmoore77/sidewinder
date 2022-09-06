@@ -9,6 +9,7 @@ from munch import Munch, munchify
 import os
 import re
 from tempfile import TemporaryDirectory
+import mgzip
 import tarfile
 
 # Constants
@@ -46,9 +47,10 @@ class Worker:
                                           tarfile_path: str
                                           ):
         logger.info(msg=f"Extract tarfile: '{tarfile_path}' contents to directory: '{self.local_database_dir}'")
-        with tarfile.open(name=tarfile_path) as tar:
-            database_dir_name = tar.getmembers()[0].name
-            tar.extractall(path=self.local_database_dir)
+        with mgzip.open(tarfile_path, "rt", thread=self.duckdb_threads) as gz:
+            with tarfile.open(name=gz.name) as tar:
+                database_dir_name = tar.getmembers()[0].name
+                tar.extractall(path=self.local_database_dir)
 
         database_full_path = os.path.join(self.local_database_dir, database_dir_name)
 
