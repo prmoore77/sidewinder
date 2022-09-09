@@ -125,14 +125,18 @@ async def get_s3_files(shard_data_path):
 
     bucket_name = shard_data_path.split("/")[2]
     file_path = "/".join(shard_data_path.split("/")[3:])
-    response = s3_client.list_objects_v2(Bucket=bucket_name)
-    files = response.get("Contents")
+
+    paginator = s3_client.get_paginator('list_objects_v2')
+    pages = paginator.paginate(Bucket=bucket_name, Prefix=file_path)
 
     s3_files = []
-    for file in files:
-        file_name = file['Key']
-        if file_path in file_name and re.search(pattern="\.tar.gz$", string=file_name):
-            s3_files.append(f"s3://{bucket_name}/{file_name}")
+    for page in pages:
+        files = page['Contents']
+
+        for file in files:
+            file_name = file['Key']
+            if file_path in file_name and re.search(pattern="\.tar.gz$", string=file_name):
+                s3_files.append(f"s3://{bucket_name}/{file_name}")
 
     return s3_files
 

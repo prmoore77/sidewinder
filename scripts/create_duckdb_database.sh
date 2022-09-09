@@ -13,7 +13,7 @@ then
   DUCKDB="../include/macos/duckdb"
 else
   READLINK_COMMAND="readlink"
-  DUCKDB="../include/linux/duckdb"
+  DUCKDB="duckdb"
 fi
 
 SCRIPT_DIR=$(dirname ${0})

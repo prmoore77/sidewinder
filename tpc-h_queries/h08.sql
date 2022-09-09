@@ -2,7 +2,8 @@ SELECT o_year,
        sum(CASE
                WHEN nation = 'BRAZIL' THEN volume
                ELSE 0
-           END) / sum(volume) AS mkt_share
+           END) AS numerator
+    , sum(volume) AS mkt_share
 FROM
   (SELECT strftime('%Y', o_orderdate) AS o_year,
           l_extendedprice * (1 - l_discount) AS volume,

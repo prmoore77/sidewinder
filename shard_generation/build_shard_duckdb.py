@@ -187,7 +187,7 @@ def main(shard_count: int,
                          f"--working-temporary-dir={working_temporary_dir}"
                          )
                     )
-        assert max_shard is None or max_shard < shard_count
+        assert max_shard is None or max_shard <= shard_count
 
         for shard_id in range(min_shard, (max_shard or shard_count) + 1):
             build_shard(shard_id=shard_id,
@@ -205,4 +205,4 @@ if __name__ == "__main__":
 
 
 # Example call:
-# python -m build_shard_duckdb --shard-count=101 --min-shard=92 --max-shard=94 --source-data-path="/home/app_user/local_data/tpch_1000" --output-data-path="s3://voltrondata-sidewinder/shards/tpch/1000" --working-temporary-dir="/home/app_user/local_data"
+# python -m build_shard_duckdb --shard-count=1001 --min-shard=901 --max-shard=1001 --source-data-path="/home/app_user/data/tpch_10000" --output-data-path="s3://voltrondata-sidewinder/shards/tpch/10000" --working-temporary-dir="/home/app_user/data"
