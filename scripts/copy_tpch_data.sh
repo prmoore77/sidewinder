@@ -27,8 +27,8 @@ do
     --exclude="*" --include="*.${i}*.parquet" --recursive &
 done
 
-mkdir --parents ${DATA_DIR}/region
+mkdir -p ${DATA_DIR}/region
 aws s3 cp s3://voltrondata-tpch/${TPCH_SCALE_FACTOR}/parquet/region "${DATA_DIR}/region" --recursive
 
-mkdir --parents ${DATA_DIR}/nation
+mkdir -p ${DATA_DIR}/nation
 aws s3 cp s3://voltrondata-tpch/${TPCH_SCALE_FACTOR}/parquet/nation "${DATA_DIR}/nation" --recursive
