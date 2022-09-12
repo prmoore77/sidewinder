@@ -124,7 +124,7 @@ async def get_s3_files(shard_data_path):
     s3_client = boto3.client("s3")
 
     bucket_name = shard_data_path.split("/")[2]
-    file_path = "/".join(shard_data_path.split("/")[3:])
+    file_path = "/".join(shard_data_path.split("/")[3:]) + "/"
 
     paginator = s3_client.get_paginator('list_objects_v2')
     pages = paginator.paginate(Bucket=bucket_name, Prefix=file_path)

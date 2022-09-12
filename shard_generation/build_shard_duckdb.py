@@ -13,6 +13,7 @@ import tarfile
 import boto3
 import re
 from pigz_python import PigzFile
+from pathlib import Path
 
 
 TIMER_TEXT = "{name}: Elapsed time: {:.4f} seconds"
@@ -54,6 +55,7 @@ def copy_shard_file(src: str, dst: str):
             s3_client.upload_file(src, bucket_name, dest_file_path)
         else:
             # Copy the output database file...
+            Path(dst).parent.resolve().mkdir(parents=True, exist_ok=True)
             shutil.copy(src=src, dst=dst)
 
 
