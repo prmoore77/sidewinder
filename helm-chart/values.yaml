@@ -4,8 +4,7 @@
 
 server:
   config:
-    shardCount: 11
-    tpchScale: 100
+    tpchScale: 1000
     pingTimeout: 900
 
   replicaCount: 1
@@ -46,9 +45,13 @@ server:
       memory: 64Gi
 
   nodeSelector:
-    alpha.eksctl.io/nodegroup-name: sw-cpu-node-group
+    alpha.eksctl.io/nodegroup-name: swt-cpu-node-group
 
-  tolerations: []
+  tolerations:
+    - key: sidewinder
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
 
   affinity: {}
 
@@ -82,16 +85,20 @@ worker:
 
   resources:
     limits:
-      cpu: 8
-      memory: 32Gi
+      cpu: 4
+      memory: 16Gi
     requests:
-      cpu: 8
-      memory: 32Gi
+      cpu: 4
+      memory: 16Gi
 
   nodeSelector:
-    alpha.eksctl.io/nodegroup-name: sw-cpu-node-group
+    alpha.eksctl.io/nodegroup-name: swt-cpu-node-group
 
-  tolerations: []
+  tolerations:
+    - key: sidewinder
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
 
   affinity: {}
 
@@ -134,8 +141,12 @@ client:
       memory: 2Gi
 
   nodeSelector:
-    alpha.eksctl.io/nodegroup-name: sw-cpu-node-group
+    alpha.eksctl.io/nodegroup-name: swt-cpu-node-group
 
-  tolerations: []
+  tolerations:
+    - key: sidewinder
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
 
   affinity: {}

@@ -1,0 +1,75 @@
+tables:
+  - name: orders
+    parent_table_name: ''
+    query_template: |-
+      SELECT CAST ({shard_id} AS INTEGER) AS shard_id
+           , orders.* 
+        FROM read_parquet('{data_path}/orders/orders.*.parquet') AS orders
+       WHERE mod (abs (hash (o_custkey)), {overall_shard_count}) + 1 = {shard_id}
+  - name: lineitem
+    parent_table_name: orders
+    query_template: |-
+      SELECT l_orderkey
+           , l_partkey
+           , l_suppkey
+           , l_linenumber
+           , l_quantity
+           , l_extendedprice
+           , l_discount
+           , l_tax
+           , l_returnflag
+           , l_linestatus
+           , l_shipdate
+           , l_commitdate
+           , l_receiptdate
+           , l_shipinstruct
+           , l_shipmode 
+        FROM read_parquet('{data_path}/lineitem/lineitem.*.parquet')
+       WHERE l_orderkey IN (SELECT DISTINCT o_orderkey
+                              FROM {parent_table_dataset}
+                           )
+  - name: customer
+    parent_table_name: orders
+    query_template: |-
+      SELECT * 
+        FROM read_parquet('{data_path}/customer/customer.*.parquet') 
+       WHERE c_custkey IN (SELECT DISTINCT o_custkey 
+                             FROM {parent_table_dataset}
+                          )
+  - name: nation
+    parent_table_name: ''
+    query_template: |-
+      SELECT *
+        FROM read_parquet('{data_path}/nation/nation.parquet')
+  - name: part
+    parent_table_name: lineitem
+    query_template: |-
+      SELECT *
+        FROM read_parquet('{data_path}/part/part.*.parquet')
+       WHERE p_partkey IN (SELECT DISTINCT l_partkey 
+                             FROM {parent_table_dataset}
+                          )
+  - name: region
+    parent_table_name: ''
+    query_template: |-
+      SELECT *
+        FROM read_parquet('{data_path}/region/region.parquet')
+  - name: partsupp
+    parent_table_name: part
+    query_template: |-
+      SELECT ps_partkey
+           , ps_suppkey
+           , ps_availqty
+           , ps_supplycost
+        FROM read_parquet('{data_path}/partsupp/partsupp.*.parquet')
+       WHERE ps_partkey IN (SELECT DISTINCT p_partkey
+                              FROM {parent_table_dataset}
+                           )
+  - name: supplier
+    parent_table_name: partsupp
+    query_template: |-
+      SELECT *
+        FROM read_parquet('{data_path}/supplier/supplier.*.parquet') 
+       WHERE s_suppkey IN (SELECT DISTINCT ps_suppkey 
+                             FROM {parent_table_dataset}
+                          )

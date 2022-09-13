@@ -25,40 +25,31 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml .Values.worker.podSecurityContext | nindent 8 }}
+      volumes:
+        - name: nvme-volume
+          hostPath:
+            # directory location on host
+            path: /nvme/disk
+            # this field is optional
+            type: Directory
+      initContainers:
+        - name: volume-mount-hack
+          image: busybox
+          command: [ "sh", "-c", "chmod 777 /data" ]
+          volumeMounts:
+            - name: nvme-volume
+              mountPath: /data
       containers:
         - name: {{ .Chart.Name }}
+          volumeMounts:
+            - mountPath: /tmp
+              name: nvme-volume
           command: [ "/bin/bash" ]
           # args: [ "-c", "sleep infinity" ]
           args: [ "-c", "python -m worker" ]
           env:
             - name: SERVER_URL
               value: ws://{{ include "sidewinder.fullname" . }}:{{ .Values.server.service.port }}/worker
-            - name: LOAD_DUCKDB_S3_EXTENSION
-              value: "True"
-            - name: S3_ACCESS_KEY_ID
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "sidewinder.fullname" . }}-secret
-                  key: S3_ACCESS_KEY_ID
-                  optional: false
-            - name: S3_REGION
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "sidewinder.fullname" . }}-secret
-                  key: S3_REGION
-                  optional: false
-            - name: S3_SECRET_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "sidewinder.fullname" . }}-secret
-                  key: S3_SECRET_ACCESS_KEY
-                  optional: false
-            - name: S3_SESSION_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "sidewinder.fullname" . }}-secret
-                  key: S3_SESSION_TOKEN
-                  optional: false
           securityContext:
             {{- toYaml .Values.worker.securityContext | nindent 12 }}
           image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag | default .Chart.AppVersion }}"

@@ -18,6 +18,9 @@ from utils import get_dataframe_from_bytes
 
 import pandas as pd
 
+# Misc. Constants
+SIDEWINDER_CLIENT_VERSION = "0.0.1"
+
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 0)
@@ -111,7 +114,7 @@ async def run_client(
     inputs: asyncio.Queue[str],
     stop: asyncio.Future[None],
 ) -> None:
-    print(f"Starting Sidewinder Client - connecting to server: {uri}")
+    print(f"Starting Sidewinder Client - version: {SIDEWINDER_CLIENT_VERSION} - connecting to server: {uri}")
     try:
         websocket = await connect(uri,
                                   extra_headers=dict(),

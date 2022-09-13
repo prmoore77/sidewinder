@@ -37,7 +37,7 @@ class Query(object):
         return False
 
     def __get_summary_query(self):
-        if self.has_aggregates:
+        def __get_select_and_group_by_sql():
             group_by_clause = ""
             aggregate_clause = ""
             for target in self.select_stmt.targetList:
@@ -69,7 +69,40 @@ class Query(object):
             if group_by_clause:
                 group_by_clause = f" GROUP BY {group_by_clause.lstrip(', ')}"
 
-            return_sql = f"SELECT {select_column_sql} FROM combined_result {group_by_clause}"
+            return select_column_sql, group_by_clause
+
+        def __get_order_by_clause():
+            sort_columns = getattr(self.select_stmt, "sortClause", None)
+            order_by_clause = ""
+            if sort_columns:
+                order_by_clause = "\nORDER BY "
+                comma = ""
+                for sort_column in sort_columns:
+                    if hasattr(sort_column.SortBy.node, "ColumnRef"):
+                        column_name = sort_column.SortBy.node.ColumnRef.fields[0].String.str
+                    elif hasattr(sort_column.SortBy.node, "A_Const"):
+                        column_name = sort_column.SortBy.node.A_Const.val.Integer.ival
+                    sort_direction = "ASC" if sort_column.SortBy.sortby_dir == "SORTBY_DEFAULT" else "DESC"
+                    sort_nulls = "NULLS FIRST" if sort_column.SortBy.sortby_nulls == "SORTBY_NULLS_DEFAULT" else "NULLS LAST"
+                    order_by_clause += f"{comma}{column_name} {sort_direction} {sort_nulls}"
+                    comma = ",\n"
+
+            return order_by_clause
+
+        def __get_limit_clause():
+            limit_option = getattr(self.select_stmt, "limitCount", None)
+            limit_clause = ""
+            if limit_option:
+                limit_clause = f"\nLIMIT {limit_option.A_Const.val.Integer.ival}"
+
+            return limit_clause
+
+        if self.has_aggregates:
+            select_column_sql, group_by_clause = __get_select_and_group_by_sql()
+            order_by_clause = __get_order_by_clause()
+            limit_clause = __get_limit_clause()
+
+            return_sql = f"SELECT {select_column_sql} FROM combined_result {group_by_clause}{order_by_clause}{limit_clause}"
             return sqlparse.format(sql=return_sql,
                                    reindent=True,
                                    keyword_case='upper',
@@ -98,7 +131,7 @@ class Query(object):
 #        l_returnflag,
 #        l_linestatus
 #  order by
-#        l_returnflag,
-#        l_linestatus;""")
+#        1, 2
+# limit 100;""")
 #
 # print(x)
