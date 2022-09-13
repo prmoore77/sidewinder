@@ -38,11 +38,13 @@ class Query(object):
 
     def __get_summary_query(self):
         def __get_select_and_group_by_sql():
+            select_column_sql = ""
             group_by_clause = ""
-            aggregate_clause = ""
             for target in self.select_stmt.targetList:
                 if not target_is_aggregate(target):
-                    group_by_clause += f", {target.ResTarget.val.ColumnRef.fields[0].String.str}"
+                    column_name = target.ResTarget.val.ColumnRef.fields[0].String.str
+                    group_by_clause += f", {column_name}"
+                    select_column_sql += f", {column_name}"
                 else:
                     raw_aggregate_function = \
                         target.ResTarget.val.FuncCall.funcname[
@@ -63,9 +65,10 @@ class Query(object):
                                        f'{target.ResTarget.val.FuncCall.args[0].ColumnRef.fields[0].String.str})"'
                                        )
 
-                    aggregate_clause += f", {summary_aggregate_function} ({column_name}) AS {column_name}"
+                    aggregate_clause = f", {summary_aggregate_function} ({column_name}) AS {column_name}"
+                    select_column_sql += aggregate_clause
 
-            select_column_sql = (group_by_clause + aggregate_clause).strip(', ')
+            select_column_sql = select_column_sql.strip(', ')
             if group_by_clause:
                 group_by_clause = f" GROUP BY {group_by_clause.lstrip(', ')}"
 
