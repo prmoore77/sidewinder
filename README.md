@@ -38,10 +38,10 @@ Next - you'll need to create a DuckDB database for the server (this is needed fo
 scripts/create_duckdb_database.sh 1
 ```
 
-Next - you need to generate a shard - in this case we'll just generate one shard for a single worker:
+Next - you need to generate some shards - in this case we'll just generate 11 shards (we need an odd number for even distribution due to DuckDB's hash function):
 ```
 cd shard_generation
-python -m build_shard_duckdb --shard-count=1 --source-data-path="../data/tpch/1" --output-data-path="../data/shards/tpch/1"
+python -m build_shard_duckdb --shard-count=11 --source-data-path="../data/tpch/1" --output-data-path="../data/shards/tpch/1"
 cd ..
 ```
 
@@ -53,7 +53,7 @@ cd ..
 ### 2) Worker:
 #### Open another terminal, then:
 ```python -m worker```
-##### Note:  you can run up to 10 workers in the default configuration... 
+##### Note: you can run up to 11 workers for this example configuration... 
 
 ### 3) Client:
 #### Open another terminal, then:
@@ -61,7 +61,7 @@ cd ..
 
 ##### Then - while in the client - you can run a sample query that will distribute to the worker(s) (if you have at least one running) - example:
 ```SELECT COUNT(*) FROM lineitem;```
-##### Note: if you are running less than 10 workers - your answer will only reflect n/10 of the data (where n is the worker count).  We will add delta processing at a later point...
+##### Note: if you are running less than 11 workers - your answer will only reflect n/11 of the data (where n is the worker count).  We will add delta processing at a later point...
 
 ##### A query that won't distribute (because it does not contain aggregates) - would be:
 ```SELECT * FROM region;```
