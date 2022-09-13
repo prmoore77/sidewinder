@@ -4,7 +4,7 @@
 
 server:
   config:
-    tpchScale: 10000
+    tpchScale: 1000
     pingTimeout: 900
 
   replicaCount: 1

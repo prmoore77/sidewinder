@@ -95,8 +95,9 @@ class SidewinderServer:
 
         logger.info(
             msg=(f"Starting Sidewinder Server - version: {self.version} - (\n"
-                 f" database_file: '{self.database_file}',\n"
+                 f" port: {self.port},\n"
                  f" shard_data_path: '{self.shard_data_path}',\n"
+                 f" database_file: '{self.database_file}',\n"
                  f" duckdb_threads: {self.duckdb_threads},\n"
                  f" duckdb_memory_limit: {self.duckdb_memory_limit}b,\n"
                  f" max_process_workers: {self.max_process_workers},\n"
@@ -465,7 +466,7 @@ class SidewinderWorker:
 @click.option(
     "--shard-data-path",
     type=str,
-    default=os.getenv("SHARD_DATA_PATH", "data/shards/tpch_1"),
+    default=os.getenv("SHARD_DATA_PATH", "data/shards/tpch/1"),
     show_default=True,
     required=True,
     help="The worker source parquet data file path to use (for shards)."

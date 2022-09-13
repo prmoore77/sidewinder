@@ -28,10 +28,21 @@ Open a terminal - then set your Environment variables for use with the cli
 Note: If running on MacOS - you'll need to have [homebrew](https://brew.sh) installed, then install coreutils with:  
 ```brew install coreutils```
 
-After that - you can get a sample TPC-H source DuckDB database - run:
+After that - you can get a sample TPC-H source DuckDB database - to get Scale Factor 1 parquet data - run:
 ```
 scripts/copy_tpch_data.sh 1
+```
+
+Next - you'll need to create a DuckDB database for the server (this is needed for the server to run queries that can't distribute) - run:
+```
 scripts/create_duckdb_database.sh 1
+```
+
+Next - you need to generate a shard - in this case we'll just generate one shard for a single worker:
+```
+cd shard_generation
+python -m build_shard_duckdb --shard-count=1 --source-data-path="../data/tpch/1" --output-data-path="../data/shards/tpch/1"
+cd ..
 ```
 
 ## Run sidewinder locally (from root of repo)
