@@ -11,6 +11,7 @@ import re
 from tempfile import TemporaryDirectory
 import mgzip
 import tarfile
+import platform
 
 # Constants
 SUCCESS = "SUCCESS"
@@ -108,6 +109,7 @@ class Worker:
                          f" max_websocket_message_size: {self.max_websocket_message_size}"
                          )
                     )
+        logger.info(f"Running on CPU Platform: {platform.machine()}")
         logger.info(f"Using DuckDB version: {duckdb.__version__}")
 
         with TemporaryDirectory(dir="/tmp") as self.local_database_dir:

@@ -1,4 +1,13 @@
-FROM --platform=linux/amd64 python:3.8
+FROM python:3.9
+
+ARG TARGETPLATFORM
+ARG TARGETARCH
+ARG TARGETVARIANT
+RUN printf "I'm building for TARGETPLATFORM=${TARGETPLATFORM}" \
+    && printf ", TARGETARCH=${TARGETARCH}" \
+    && printf ", TARGETVARIANT=${TARGETVARIANT} \n" \
+    && printf "With uname -s : " && uname -s \
+    && printf "and  uname -m : " && uname -mm
 
 # Update OS and install packages
 RUN apt-get update --yes && \
@@ -12,7 +21,11 @@ RUN apt-get update --yes && \
 # Setup the AWS Client
 WORKDIR /tmp
 
-RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+RUN case ${TARGETPLATFORM} in \
+         "linux/amd64")  AWSCLI_FILE=https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip  ;; \
+         "linux/arm64")  AWSCLI_FILE=https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip  ;; \
+    esac && \
+    curl "${AWSCLI_FILE}" -o "awscliv2.zip" && \
     unzip awscliv2.zip && \
     ./aws/install && \
     rm -f awscliv2.zip
@@ -40,7 +53,11 @@ RUN pip install --upgrade pip && \
 COPY --chown=app_user:app_user . .
 
 # Install DuckDB CLI
-RUN curl --output /tmp/duckdb.zip --location https://github.com/duckdb/duckdb/releases/download/v0.5.0/duckdb_cli-linux-amd64.zip && \
+RUN case ${TARGETPLATFORM} in \
+         "linux/amd64")  DUCKDB_FILE=https://github.com/duckdb/duckdb/releases/download/v0.5.0/duckdb_cli-linux-amd64.zip  ;; \
+         "linux/arm64")  DUCKDB_FILE=https://github.com/duckdb/duckdb/releases/download/v0.5.0/duckdb_cli-linux-aarch64.zip  ;; \
+    esac && \
+    curl --output /tmp/duckdb.zip --location ${DUCKDB_FILE} && \
     unzip /tmp/duckdb.zip -d ${LOCAL_BIN} && \
     rm /tmp/duckdb.zip
 

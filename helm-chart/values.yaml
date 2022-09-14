@@ -45,7 +45,7 @@ server:
       memory: 64Gi
 
   nodeSelector:
-    alpha.eksctl.io/nodegroup-name: swt-cpu-node-group
+    alpha.eksctl.io/nodegroup-name: graviton-cpu-node-group
 
   tolerations:
     - key: sidewinder
@@ -92,7 +92,7 @@ worker:
       memory: 16Gi
 
   nodeSelector:
-    alpha.eksctl.io/nodegroup-name: swt-cpu-node-group
+    alpha.eksctl.io/nodegroup-name: graviton-cpu-node-group
 
   tolerations:
     - key: sidewinder
@@ -141,7 +141,7 @@ client:
       memory: 2Gi
 
   nodeSelector:
-    alpha.eksctl.io/nodegroup-name: swt-cpu-node-group
+    alpha.eksctl.io/nodegroup-name: graviton-cpu-node-group
 
   tolerations:
     - key: sidewinder
