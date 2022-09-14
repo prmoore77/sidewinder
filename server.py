@@ -369,7 +369,9 @@ class SidewinderWorker:
                 msg=f"Worker Websocket connection: '{self.websocket_connection.id}' - connected")
 
             await self.websocket_connection.send(json.dumps(dict(kind="Info",
-                                                                 text=f"Sidewinder Server - version: {self.server.version}"
+                                                                 text=(f"Sidewinder Server - version: {self.server.version} - "
+                                                                       f"CPU platform: {platform.machine()}"
+                                                                       )
                                                                  )
                                                             )
                                                  )
