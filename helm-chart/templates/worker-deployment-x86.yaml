@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "sidewinder.fullname" . }}-worker
+  name: {{ include "sidewinder.fullname" . }}-worker-x86
   labels:
     {{- include "sidewinder.labels" . | nindent 4 }}
 spec:
@@ -68,10 +68,8 @@ spec:
 #              port: http
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}
-      {{- with .Values.worker.nodeSelector }}
       nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+        alpha.eksctl.io/nodegroup-name: swt-cpu-node-group
       {{- with .Values.worker.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}

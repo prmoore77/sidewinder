@@ -1,5 +1,5 @@
 click==8.1.*
-duckdb==0.5.*
+duckdb==0.5.1
 duckdb-engine==0.2.*
 websockets==10.3.*
 munch==2.5.*

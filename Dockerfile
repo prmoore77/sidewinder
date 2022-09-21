@@ -52,10 +52,12 @@ RUN pip install --upgrade pip && \
 # Copy source code files
 COPY --chown=app_user:app_user . .
 
+ARG DUCKDB_VERSION="0.5.1"
+
 # Install DuckDB CLI
 RUN case ${TARGETPLATFORM} in \
-         "linux/amd64")  DUCKDB_FILE=https://github.com/duckdb/duckdb/releases/download/v0.5.0/duckdb_cli-linux-amd64.zip  ;; \
-         "linux/arm64")  DUCKDB_FILE=https://github.com/duckdb/duckdb/releases/download/v0.5.0/duckdb_cli-linux-aarch64.zip  ;; \
+         "linux/amd64")  DUCKDB_FILE=https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip  ;; \
+         "linux/arm64")  DUCKDB_FILE=https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-aarch64.zip  ;; \
     esac && \
     curl --output /tmp/duckdb.zip --location ${DUCKDB_FILE} && \
     unzip /tmp/duckdb.zip -d ${LOCAL_BIN} && \
