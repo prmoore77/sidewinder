@@ -10,7 +10,7 @@ OS_PLATFORM=$(uname)
 if [ "${OS_PLATFORM}" == "Darwin" ];
 then
   READLINK_COMMAND="greadlink"
-  DUCKDB="../include/macos/duckdb"
+  DUCKDB="duckdb"
 else
   READLINK_COMMAND="readlink"
   DUCKDB="duckdb"
