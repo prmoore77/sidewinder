@@ -1,9 +1,7 @@
 # Sidewinder
 Python-based Distributed Database
 
-Sidewinder is a [Python](https://python.org)-based Proof-of-Concept Distributed Database that distributes shards of data from the server to a number of workers to "divide and conquer" OLAP database workloads.
-
-It is written with [asyncio](https://docs.python.org/3/library/asyncio.html) for fast communication between the server and many workers.
+Sidewinder is a [Python](https://python.org)-based (with [asyncio](https://docs.python.org/3/library/asyncio.html)) Proof-of-Concept Distributed Database that distributes shards of data from the server to a number of workers to "divide and conquer" OLAP database workloads.
 
 It consists of a server, workers, and a client (where you can run interactive SQL commands).
 
