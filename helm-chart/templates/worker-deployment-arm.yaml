@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sidewinder.fullname" . }}-worker-arm
+  labels:
+    {{- include "sidewinder.labels" . | nindent 4 }}
+spec:
+  replicas: 0 # {{ .Values.server.config.shardCount }}
+  selector:
+    matchLabels:
+      {{- include "sidewinder.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/global-secret.yaml") . | sha256sum }}
+        {{- with .Values.worker.podAnnotations }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "sidewinder.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.worker.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.worker.podSecurityContext | nindent 8 }}
+      volumes:
+        - name: nvme-volume
+          hostPath:
+            # directory location on host
+            path: /nvme/disk
+            # this field is optional
+            type: Directory
+      initContainers:
+        - name: volume-mount-hack
+          image: busybox
+          command: [ "sh", "-c", "chmod 777 /data" ]
+          volumeMounts:
+            - name: nvme-volume
+              mountPath: /data
+      containers:
+        - name: {{ .Chart.Name }}
+          volumeMounts:
+            - mountPath: /tmp
+              name: nvme-volume
+          command: [ "/bin/bash" ]
+          # args: [ "-c", "sleep infinity" ]
+          args: [ "-c", "python -m worker" ]
+          env:
+            - name: SERVER_URL
+              value: ws://{{ include "sidewinder.fullname" . }}:{{ .Values.server.service.port }}/worker
+          securityContext:
+            {{- toYaml .Values.worker.securityContext | nindent 12 }}
+          image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
+#          ports:
+#            - name: http
+#              containerPort: 80
+#              protocol: TCP
+#          livenessProbe:
+#            httpGet:
+#              path: /
+#              port: http
+#          readinessProbe:
+#            httpGet:
+#              path: /
+#              port: http
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+      nodeSelector:
+        alpha.eksctl.io/nodegroup-name: graviton-cpu-node-group
+      {{- with .Values.worker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
