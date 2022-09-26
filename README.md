@@ -28,9 +28,9 @@ Open a terminal - then set your Environment variables for use with the cli
 Note: If running on MacOS - you'll need to have [homebrew](https://brew.sh) installed, then install coreutils with:  
 ```brew install coreutils```
 
-After that - you can get a sample TPC-H source DuckDB database - to get Scale Factor 1 parquet data - run:
+After that - you can create a sample TPC-H source DuckDB database - for Scale Factor 1 parquet data - run:
 ```
-scripts/copy_tpch_data.sh 1
+scripts/generate_tpch_data.sh 1
 ```
 
 Next - you'll need to create a DuckDB database for the server (this is needed for the server to run queries that can't distribute) - run:
