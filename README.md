@@ -23,7 +23,7 @@ pip install -r requirements.txt
 Note: If running on MacOS - you'll need to have [homebrew](https://brew.sh) installed, then install coreutils with:  
 ```brew install coreutils```
 
-After that - you can create a sample TPC-H source DuckDB database - for Scale Factor 1 parquet data - run:
+After that - you can create sample TPC-H source data for Scale Factor 1 (in parquet format) - run:
 ```
 scripts/generate_tpch_data.sh 1
 ```
