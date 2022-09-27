@@ -1,4 +1,1 @@
-*.duckdb
-*.db
-*.wal
-tpch*/
+*

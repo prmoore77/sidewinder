@@ -4,7 +4,7 @@
 
 server:
   config:
-    tpchScale: 1000
+    tpchScale: 10000
     pingTimeout: 900
 
   replicaCount: 1
@@ -38,11 +38,11 @@ server:
 
   resources:
     limits:
-      cpu: 16
-      memory: 64Gi
+      cpu: 60
+      memory: 235Gi
     requests:
-      cpu: 16
-      memory: 64Gi
+      cpu: 60
+      memory: 235Gi
 
   nodeSelector:
     alpha.eksctl.io/nodegroup-name: graviton-cpu-node-group
@@ -85,11 +85,11 @@ worker:
 
   resources:
     limits:
-      cpu: 4
-      memory: 16Gi
+      cpu: 1
+      memory: 4Gi
     requests:
-      cpu: 4
-      memory: 16Gi
+      cpu: 1
+      memory: 4Gi
 
   nodeSelector:
     alpha.eksctl.io/nodegroup-name: graviton-cpu-node-group
