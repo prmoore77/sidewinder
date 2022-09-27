@@ -14,10 +14,20 @@ It uses [DuckDB](https://duckdb.org) as its SQL execution engine - and the Postg
 # Setup (to run locally)
 
 ## Install requirements
+
+### Python
 Create a new Python 3.8+ virtual environment - from the root of the repo: install the requirements with:
 ```shell
 pip install -r requirements.txt
 ```
+
+### DuckDB CLI
+Install DuckDB CLI version [0.5.1](https://github.com/duckdb/duckdb/releases/tag/v0.5.1) - and make sure the executable is on your PATH.
+
+Platform Downloads:   
+[Linux x86-64](https://github.com/duckdb/duckdb/releases/download/v0.5.1/duckdb_cli-linux-amd64.zip)   
+[Linux arm64 (aarch64)](https://github.com/duckdb/duckdb/releases/download/v0.5.1/duckdb_cli-linux-aarch64.zip)   
+[MacOS Universal](https://github.com/duckdb/duckdb/releases/download/v0.5.1/duckdb_cli-osx-universal.zip)   
 
 ## Generate source sample TPC-H (Scale Factor 1) data
 Note: If running on MacOS - you'll need to have [homebrew](https://brew.sh) installed, then install coreutils with:  
