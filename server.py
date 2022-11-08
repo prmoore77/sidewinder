@@ -181,7 +181,7 @@ class SidewinderSQLClient:
     async def set_client_attribute(self, message):
         try:
             match = re.search(pattern='^\.set (\S+)\s*=\s*(\S+)\s*$', string=message.rstrip(' ;/'))
-            setting = match[1]
+            setting = match[1].lower()
             value = match[2].upper()
 
             if setting == 'distributed':
@@ -270,7 +270,7 @@ class SidewinderQuery:
 
     async def run_on_server(self):
         await self.client.websocket_connection.send(
-            f"Query: '{self.query_id}' - will NOT be distributed - reason: '{self.distribute_rationale}'.  Running server-side...")
+            f"Query: '{self.query_id}' - will NOT be distributed - reason: '{', '.join(self.distribute_rationale)}'.  Running server-side...")
 
         try:
             result_bytes = await self.client.server.event_loop.run_in_executor(
@@ -318,24 +318,21 @@ class SidewinderQuery:
             await self.client.websocket_connection.send(
                 f"Query: '{self.query_id}' - failed to parse - error: {self.error_message}")
         else:
-            self.distribute_rationale = ""
-            comma = ""
+            self.distribute_rationale = []
             if self.client.distributed_mode and self.parsed_query.has_aggregates and len(self.client.server.worker_connections) > 0:
                 self.distribute_query = True
 
             if len(self.client.server.worker_connections) == 0:
                 self.distribute_query = False
-                self.distribute_rationale = "There are no workers connected to the server"
-                comma = ", "
+                self.distribute_rationale.append("There are no workers connected to the server")
 
             if not self.parsed_query.has_aggregates:
                 self.distribute_query = False
-                self.distribute_rationale += f"{comma}Query contains no aggregates"
-                comma = ", "
+                self.distribute_rationale.append("Query contains no aggregates")
 
             if not self.client.distributed_mode:
                 self.distribute_query = False
-                self.distribute_rationale += f"{comma}Client distributed mode is disabled"
+                self.distribute_rationale.append("Client distributed mode is disabled")
 
             if self.distribute_query:
                 await self.distribute_to_workers()
