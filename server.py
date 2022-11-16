@@ -248,7 +248,9 @@ class SidewinderQuery:
 
     def _parse(self):
         try:
-            parsed_query = Query(self.sql.rstrip("/"))
+            parsed_query = Query(query_text=self.sql.rstrip("/"),
+                                 database_file=self.client.server.database_file
+                                 )
         except Exception as e:
             self.parsed_successfully = False
             self.error_message = str(e)

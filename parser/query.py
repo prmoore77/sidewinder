@@ -3,6 +3,9 @@ import json
 import sqlparse
 from munch import munchify
 from pglast import parser
+import duckdb
+
+
 
 
 def target_is_aggregate(target):
@@ -15,7 +18,7 @@ def target_is_aggregate(target):
 
 
 class Query(object):
-    def __init__(self, query_text: str):
+    def __init__(self, query_text: str, database_file: str):
         self.query_text = query_text
         self.parsed_query = munchify(
             x=json.loads(parser.parse_sql_json(query=self.query_text))).stmts[0]
@@ -23,6 +26,17 @@ class Query(object):
         self.select_stmt = self.parsed_query.stmt.SelectStmt
 
         self.summary_query = self.__get_summary_query()
+
+        # Used for the substrait extension
+        self.database_file = database_file
+        self._con = duckdb.connect(database=self.database_file)
+        self._con.install_extension("substrait")
+        self._con.load_extension("substrait")
+
+        self.substrait = self.__get_substrait()
+        print(self.substrait)
+        self._con.close()
+        pass
 
     def _validate_query(self):
         if not hasattr(self.parsed_query.stmt, "SelectStmt"):
@@ -113,6 +127,10 @@ class Query(object):
                                    use_space_around_operators=True,
                                    comma_first=True
                                    )
+
+    def __get_substrait(self):
+        return self._con.get_substrait(query=self.query_text).fetchone()[0]
+
 
 # x = Query(query_text="""
 # select
