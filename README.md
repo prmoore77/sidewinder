@@ -22,12 +22,12 @@ pip install -r requirements.txt
 ```
 
 ### DuckDB CLI
-Install DuckDB CLI version [0.5.1](https://github.com/duckdb/duckdb/releases/tag/v0.5.1) - and make sure the executable is on your PATH.
+Install DuckDB CLI version [0.6.0](https://github.com/duckdb/duckdb/releases/tag/v0.6.0) - and make sure the executable is on your PATH.
 
 Platform Downloads:   
-[Linux x86-64](https://github.com/duckdb/duckdb/releases/download/v0.5.1/duckdb_cli-linux-amd64.zip)   
-[Linux arm64 (aarch64)](https://github.com/duckdb/duckdb/releases/download/v0.5.1/duckdb_cli-linux-aarch64.zip)   
-[MacOS Universal](https://github.com/duckdb/duckdb/releases/download/v0.5.1/duckdb_cli-osx-universal.zip)   
+[Linux x86-64](https://github.com/duckdb/duckdb/releases/download/v0.6.0/duckdb_cli-linux-amd64.zip)   
+[Linux arm64 (aarch64)](https://github.com/duckdb/duckdb/releases/download/v0.6.0/duckdb_cli-linux-aarch64.zip)   
+[MacOS Universal](https://github.com/duckdb/duckdb/releases/download/v0.6.0/duckdb_cli-osx-universal.zip)   
 
 ## Generate source sample TPC-H (Scale Factor 1) data
 Note: If running on MacOS - you'll need to have [homebrew](https://brew.sh) installed, then install coreutils with:  
@@ -45,9 +45,9 @@ scripts/create_duckdb_database.sh 1
 
 Next - you need to generate some shards - in this case we'll just generate 11 shards (we need an odd number for even distribution due to DuckDB's hash function):
 ```
-cd shard_generation
+pushd shard_generation
 python -m build_shard_duckdb --shard-count=11 --source-data-path="../data/tpch/1" --output-data-path="../data/shards/tpch/1"
-cd ..
+popd
 ```
 
 ## Run sidewinder locally (from root of repo)
