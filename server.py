@@ -3,11 +3,13 @@ import base64
 import functools
 import json
 import os
+import platform
 import re
+import sys
 import uuid
-from uuid import UUID
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from datetime import datetime
+from uuid import UUID
 
 import click
 import duckdb
@@ -15,25 +17,14 @@ import websockets
 from munch import Munch
 
 from config import logger
+from constants import SHARD_CONFIRMATION, STARTED, DISTRIBUTED, FAILED, COMPLETED, WORKER_SUCCESS, WORKER_FAILED, DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, \
+    SHARD_DATASET, RESULT
 from parser.query import Query
 from utils import combine_bytes_results, get_s3_files, get_files
 from utils import coro, get_cpu_count, get_memory_limit, run_query
-import platform
-
-# Query Status Constants
-STARTED = "STARTED"
-DISTRIBUTED = "DISTRIBUTED"
-RUN_ON_SERVER = "RUN_ON_SERVER"
-FAILED = "FAILED"
-COMPLETED = "COMPLETED"
-
-# Worker Status Constants
-WORKER_SUCCESS = "SUCCESS"
-WORKER_FAILED = "FAILED"
 
 # Misc. Constants
 SIDEWINDER_SERVER_VERSION = "0.0.1"
-DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE = 1024 ** 3
 
 
 class Shard:
@@ -108,6 +99,7 @@ class SidewinderServer:
                  )
         )
         logger.info(f"Running on CPU Platform: {platform.machine()}")
+        logger.info(f"Using Python version: {sys.version}")
         logger.info(f"Using DuckDB version: {duckdb.__version__}")
 
         async with websockets.serve(ws_handler=self.bound_handler,
@@ -354,7 +346,7 @@ class SidewinderWorker:
 
     @property
     async def worker_shard_dict(self):
-        return dict(kind="ShardDataset",
+        return dict(kind=SHARD_DATASET,
                     shard_id=str(self.shard.shard_id),
                     shard_file_name=self.shard.shard_file_name,
                     worker_id=str(self.worker_id)
@@ -448,9 +440,9 @@ class SidewinderWorker:
                         msg=f"Message (kind={worker_message.kind}) received from Worker: '{self.worker_id}'"
                             f" (shard: '{self.shard.shard_id}') - size: {len(message)}")
 
-                    if worker_message.kind == "ShardConfirmation":
+                    if worker_message.kind == SHARD_CONFIRMATION:
                         await self.process_shard_confirmation(worker_message=worker_message)
-                    elif worker_message.kind == "Result":
+                    elif worker_message.kind == RESULT:
                         await self.process_worker_result(worker_message=worker_message)
         except websockets.exceptions.ConnectionClosedError:
             pass

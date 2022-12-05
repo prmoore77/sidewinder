@@ -1,24 +1,24 @@
-import websockets
-import click
-
-from utils import coro, get_dataframe_results_as_base64_str, get_cpu_count, get_memory_limit, copy_database_file
-from config import logger
 import json
-import duckdb
-from munch import Munch, munchify
 import os
-import re
-from tempfile import TemporaryDirectory
-import mgzip
-import tarfile
 import platform
+import re
+import sys
+import tarfile
+from tempfile import TemporaryDirectory
+
+import click
+import duckdb
+import mgzip
+import websockets
+from munch import Munch, munchify
+
+from config import logger
+from constants import DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, SHARD_CONFIRMATION, SHARD_DATASET, INFO, QUERY, ERROR, RESULT, WORKER_FAILED, WORKER_SUCCESS
+from utils import coro, get_dataframe_results_as_base64_str, get_cpu_count, get_memory_limit, copy_database_file
 
 # Constants
-SUCCESS = "SUCCESS"
-FAILED = "FAILED"
 CTAS_RETRY_LIMIT = 3
 SIDEWINDER_WORKER_VERSION = "0.0.1"
-DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE = 1024 ** 3
 
 
 class Worker:
@@ -91,7 +91,7 @@ class Worker:
         db_connection.execute(query=f"PRAGMA threads={self.duckdb_threads}")
         db_connection.execute(query=f"PRAGMA memory_limit='{self.duckdb_memory_limit}b'")
 
-        shard_confirmed_dict = dict(kind="ShardConfirmation",
+        shard_confirmed_dict = dict(kind=SHARD_CONFIRMATION,
                                     shard_id=self.shard_id,
                                     successful=True
                                     )
@@ -110,6 +110,7 @@ class Worker:
                          )
                     )
         logger.info(f"Running on CPU Platform: {platform.machine()}")
+        logger.info(f"Using Python version: {sys.version}")
         logger.info(f"Using DuckDB version: {duckdb.__version__}")
 
         with TemporaryDirectory(dir="/tmp") as self.local_database_dir:
@@ -128,17 +129,17 @@ class Worker:
 
             if isinstance(raw_message, bytes):
                 message = munchify(x=json.loads(raw_message.decode()))
-                if message.kind == "ShardDataset":
+                if message.kind == SHARD_DATASET:
                     self.db_connection = await self.get_shard_database(message=message)
             elif isinstance(raw_message, str):
                 logger.info(msg=f"Message from server: {raw_message}")
                 message = munchify(x=json.loads(raw_message))
 
-                if message.kind == "Info":
+                if message.kind == INFO:
                     logger.info(msg=f"Informational message from server: '{message.text}'")
-                elif message.kind == "Query":
+                elif message.kind == QUERY:
                     await self.run_query(query_message=message)
-                elif message.kind == "Error":
+                elif message.kind == ERROR:
                     logger.error(msg=f"Server sent an error: {message.error_message}")
 
     async def run_query(self, query_message: Munch):
@@ -152,17 +153,17 @@ class Worker:
                     df = self.db_connection.execute(sql_command).fetch_arrow_table().replace_schema_metadata(
                         metadata=dict(query_id=query_message.query_id))
                 except Exception as e:
-                    result_dict = dict(kind="Result",
+                    result_dict = dict(kind=RESULT,
                                        query_id=query_message.query_id,
-                                       status=FAILED,
+                                       status=WORKER_FAILED,
                                        error_message=str(e),
                                        results=None
                                        )
                     logger.error(msg=f"Query: {query_message.query_id} - Failed - error: {str(e)}")
                 else:
-                    result_dict = dict(kind="Result",
+                    result_dict = dict(kind=RESULT,
                                        query_id=query_message.query_id,
-                                       status=SUCCESS,
+                                       status=WORKER_SUCCESS,
                                        error_message=None,
                                        results=get_dataframe_results_as_base64_str(df)
                                        )

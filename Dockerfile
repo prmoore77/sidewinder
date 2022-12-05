@@ -1,4 +1,4 @@
-FROM python:3.9
+FROM python:3.11
 
 ARG TARGETPLATFORM
 ARG TARGETARCH
@@ -52,7 +52,7 @@ RUN pip install --upgrade pip && \
 # Copy source code files
 COPY --chown=app_user:app_user . .
 
-ARG DUCKDB_VERSION="0.5.1"
+ARG DUCKDB_VERSION="0.6.0"
 
 # Install DuckDB CLI
 RUN case ${TARGETPLATFORM} in \
