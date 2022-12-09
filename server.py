@@ -22,6 +22,7 @@ from constants import SHARD_CONFIRMATION, STARTED, DISTRIBUTED, FAILED, COMPLETE
 from parser.query import Query
 from utils import combine_bytes_results, get_s3_files, get_files
 from utils import coro, get_cpu_count, get_memory_limit, run_query
+from utils import pyarrow
 
 # Misc. Constants
 SIDEWINDER_SERVER_VERSION = "0.0.1"
@@ -101,6 +102,8 @@ class SidewinderServer:
         logger.info(f"Running on CPU Platform: {platform.machine()}")
         logger.info(f"Using Python version: {sys.version}")
         logger.info(f"Using DuckDB version: {duckdb.__version__}")
+        logger.info(f"Using PyArrow version: {pyarrow.__version__}")
+        logger.info(f"Using Websockets version: {websockets.__version__}")
 
         async with websockets.serve(ws_handler=self.bound_handler,
                                     host="0.0.0.0",

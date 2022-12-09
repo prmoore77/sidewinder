@@ -2,7 +2,7 @@ boto3==1.26.*
 botocore==1.29.*
 click==8.1.*
 codetiming==1.4.*
-duckdb==0.6.*
+duckdb==0.6.1
 duckdb-engine==0.6.*
 jmespath==1.0.*
 mgzip==0.2.*

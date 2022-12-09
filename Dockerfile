@@ -52,7 +52,7 @@ RUN pip install --upgrade pip && \
 # Copy source code files
 COPY --chown=app_user:app_user . .
 
-ARG DUCKDB_VERSION="0.6.0"
+ARG DUCKDB_VERSION="0.6.1"
 
 # Install DuckDB CLI
 RUN case ${TARGETPLATFORM} in \

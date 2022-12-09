@@ -14,7 +14,8 @@ from munch import Munch, munchify
 
 from config import logger
 from constants import DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, SHARD_CONFIRMATION, SHARD_DATASET, INFO, QUERY, ERROR, RESULT, WORKER_FAILED, WORKER_SUCCESS
-from utils import coro, get_dataframe_results_as_base64_str, get_cpu_count, get_memory_limit, copy_database_file
+from utils import coro, pyarrow, get_dataframe_results_as_base64_str, get_cpu_count, get_memory_limit, copy_database_file
+
 
 # Constants
 CTAS_RETRY_LIMIT = 3
@@ -112,6 +113,8 @@ class Worker:
         logger.info(f"Running on CPU Platform: {platform.machine()}")
         logger.info(f"Using Python version: {sys.version}")
         logger.info(f"Using DuckDB version: {duckdb.__version__}")
+        logger.info(f"Using PyArrow version: {pyarrow.__version__}")
+        logger.info(f"Using Websockets version: {websockets.__version__}")
 
         with TemporaryDirectory(dir="/tmp") as self.local_database_dir:
             async with websockets.connect(uri=self.server_uri,
