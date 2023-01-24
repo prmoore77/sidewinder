@@ -13,12 +13,28 @@ It uses [DuckDB](https://duckdb.org) as its SQL execution engine - and the Postg
 
 # Setup (to run locally)
 
-## Install requirements
+## Install package
+
+### Clone the repo
+```shell
+git clone https://github.com/prmoore77/sidewinder
+```
 
 ### Python
-Create a new Python 3.8+ virtual environment - from the root of the repo: install the requirements with:
+Create a new Python 3.8+ virtual environment and install sidewinder-db with:
 ```shell
-pip install -r requirements.txt
+cd sidewinder
+# Create the virtual environment
+python3 -m venv ./venv
+# Activate the virtual environment
+. ./venv/bin/activate
+# Install Sidewinder-DB
+pip install .
+```
+
+#### Alternative installation from PyPi
+```shell
+pip install sidewinder-db
 ```
 
 ### DuckDB CLI
@@ -29,7 +45,7 @@ Platform Downloads:
 [Linux arm64 (aarch64)](https://github.com/duckdb/duckdb/releases/download/v0.6.1/duckdb_cli-linux-aarch64.zip)   
 [MacOS Universal](https://github.com/duckdb/duckdb/releases/download/v0.6.1/duckdb_cli-osx-universal.zip)   
 
-## Generate source sample TPC-H (Scale Factor 1) data
+## Generate source sample TPC-H (Scale Factor 1) data (only possible from repo currently, not PyPi package)
 Note: If running on MacOS - you'll need to have [homebrew](https://brew.sh) installed, then install coreutils with:  
 ```brew install coreutils```
 
@@ -50,19 +66,19 @@ python -m build_shard_duckdb --shard-count=11 --source-data-path="../data/tpch/1
 popd
 ```
 
-## Run sidewinder locally (from root of repo)
+## Run sidewinder locally (use --help option on the executables below for option details)
 ### 1) Server:
 #### Open a terminal, then:
-```python -m server```
+```sidewinder-server```
 
 ### 2) Worker:
 #### Open another terminal, then:
-```python -m worker```
+```sidewinder-worker```
 ##### Note: you can run up to 11 workers for this example configuration... 
 
 ### 3) Client:
 #### Open another terminal, then:
-```python -m client```
+```sidewinder-client```
 
 ##### Then - while in the client - you can run a sample query that will distribute to the worker(s) (if you have at least one running) - example:
 ```SELECT COUNT(*) FROM lineitem;```
