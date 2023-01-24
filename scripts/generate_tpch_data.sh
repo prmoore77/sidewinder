@@ -15,6 +15,8 @@ duckdb << EOF
 .bail on
 .echo on
 SELECT VERSION();
+INSTALL tpch;
+LOAD tpch;
 CALL dbgen(sf=${TPCH_SCALE_FACTOR});
 EXPORT DATABASE '${DATA_DIR}' (FORMAT PARQUET);
 EOF
