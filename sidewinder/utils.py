@@ -9,7 +9,7 @@ import psutil
 
 import pyarrow
 import duckdb
-from config import logger
+from sidewinder.config import logger
 import os
 
 

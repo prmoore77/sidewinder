@@ -14,7 +14,7 @@ from websockets.frames import Close
 from websockets.legacy.client import connect
 from websockets.version import version as websockets_version
 
-from utils import get_dataframe_from_bytes
+from sidewinder.utils import get_dataframe_from_bytes
 
 import pandas as pd
 
