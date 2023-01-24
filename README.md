@@ -66,7 +66,12 @@ python -m build_shard_duckdb --shard-count=11 --source-data-path="../data/tpch/1
 popd
 ```
 
-## Run sidewinder locally (use --help option on the executables below for option details)
+## Run sidewinder locally - from root of repo (use --help option on the executables below for option details)
+### Setup
+Be sure to activate the virtual environment before running the executables
+```shell
+. ./venv/bin/activate
+```
 ### 1) Server:
 #### Open a terminal, then:
 ```sidewinder-server```
