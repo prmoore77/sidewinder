@@ -77,6 +77,7 @@ RUN pip install . && \
 
 WORKDIR ${APP_DIR}
 
+# Install helpful scripts and utilities
 COPY --chown=app_user:app_user scripts ./scripts
 COPY --chown=app_user:app_user shard_generation ./shard_generation
 
