@@ -30,38 +30,55 @@ RUN case ${TARGETPLATFORM} in \
     ./aws/install && \
     rm -f awscliv2.zip
 
-# Create an application user
-RUN useradd app_user --create-home
-
-USER app_user
-
-# Update PATH
-ARG LOCAL_BIN="/home/app_user/.local/bin"
-ENV PATH="${PATH}:${LOCAL_BIN}"
-
-RUN mkdir --parents ${LOCAL_BIN}
-
-WORKDIR /home/app_user
-
-# Install Python requirements
-COPY --chown=app_user:app_user ./requirements.txt .
-
-RUN pip install --upgrade pip && \
-    pip install --requirement ./requirements.txt
-
-# Copy source code files
-COPY --chown=app_user:app_user . .
-
+# Install DuckDB CLI
 ARG DUCKDB_VERSION="0.6.1"
 
-# Install DuckDB CLI
 RUN case ${TARGETPLATFORM} in \
          "linux/amd64")  DUCKDB_FILE=https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip  ;; \
          "linux/arm64")  DUCKDB_FILE=https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-aarch64.zip  ;; \
     esac && \
     curl --output /tmp/duckdb.zip --location ${DUCKDB_FILE} && \
-    unzip /tmp/duckdb.zip -d ${LOCAL_BIN} && \
+    unzip /tmp/duckdb.zip -d /usr/bin && \
     rm /tmp/duckdb.zip
+
+# Create an application user
+RUN useradd app_user --create-home
+
+ARG APP_DIR="/opt/sidewinder"
+RUN mkdir --parents ${APP_DIR} && \
+    chown app_user:app_user ${APP_DIR}
+
+USER app_user
+
+WORKDIR ${APP_DIR}
+
+# Setup a Python Virtual environment
+ENV VIRTUAL_ENV=${APP_DIR}/venv
+RUN python3 -m venv ${VIRTUAL_ENV} && \
+    echo ". ${VIRTUAL_ENV}/bin/activate" >> ~/.bashrc && \
+    . ~/.bashrc && \
+    pip install --upgrade setuptools pip
+
+# Set the PATH so that the Python Virtual environment is referenced for subsequent RUN steps (hat tip: https://pythonspeed.com/articles/activate-virtualenv-dockerfile/)
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+
+# Copy source code files
+ARG SRC_DIR="/tmp/sidewinder"
+RUN mkdir --parents ${SRC_DIR}
+
+WORKDIR ${SRC_DIR}
+
+COPY --chown=app_user:app_user pyproject.toml .
+COPY --chown=app_user:app_user sidewinder ./sidewinder
+
+# Install the sidewinder package
+RUN pip install . && \
+    rm -rf ${SRC_DIR}
+
+WORKDIR ${APP_DIR}
+
+COPY --chown=app_user:app_user scripts ./scripts
+COPY --chown=app_user:app_user shard_generation ./shard_generation
 
 # Open web-socket port
 EXPOSE 8765

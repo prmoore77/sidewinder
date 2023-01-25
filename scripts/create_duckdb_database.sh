@@ -2,19 +2,8 @@
 
 # This script assumes you have duckdb (with all extensions) installed and it is on your system PATH
 # You should run ./copy_tpch_data.sh first if you do not have the source parquet data on the local filesystem...
-# If running on a Mac - be sure to first "brew install coreutils" to get the "greadlink" command
 
 set -e
-
-OS_PLATFORM=$(uname)
-if [ "${OS_PLATFORM}" == "Darwin" ];
-then
-  READLINK_COMMAND="greadlink"
-  DUCKDB="duckdb"
-else
-  READLINK_COMMAND="readlink"
-  DUCKDB="duckdb"
-fi
 
 SCRIPT_DIR=$(dirname ${0})
 
@@ -24,14 +13,15 @@ VIEW_OR_TABLE_OPTION=${2:-"VIEW"}
 echo "TPCH_SCALE_FACTOR=${TPCH_SCALE_FACTOR}"
 echo "VIEW_OR_TABLE_OPTION=${VIEW_OR_TABLE_OPTION}"
 
-DATA_DIR=$(${READLINK_COMMAND} --canonicalize "${SCRIPT_DIR}/../data/tpch/${TPCH_SCALE_FACTOR}")
-DATABASE_FILE=$(${READLINK_COMMAND} --canonicalize "${SCRIPT_DIR}/../data/tpch_${TPCH_SCALE_FACTOR}.db")
+DATA_DIR="data/tpch/${TPCH_SCALE_FACTOR}"
+DATABASE_FILE="data/tpch_${TPCH_SCALE_FACTOR}.db"
 
+pushd "${SCRIPT_DIR}/../"
 echo -e "(Re)creating database file: ${DATABASE_FILE}"
 
 rm -f "${DATABASE_FILE}"
 
-${DUCKDB} "${DATABASE_FILE}" << EOF
+duckdb "${DATABASE_FILE}" << EOF
 .bail on
 .echo on
 SELECT VERSION();
@@ -44,5 +34,7 @@ CREATE OR REPLACE ${VIEW_OR_TABLE_OPTION} partsupp AS SELECT * FROM read_parquet
 CREATE OR REPLACE ${VIEW_OR_TABLE_OPTION} region AS SELECT * FROM read_parquet('${DATA_DIR}/region/*');
 CREATE OR REPLACE ${VIEW_OR_TABLE_OPTION} supplier AS SELECT * FROM read_parquet('${DATA_DIR}/supplier/*');
 EOF
+
+popd
 
 echo "All done."

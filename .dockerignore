@@ -6,4 +6,7 @@ helm-chart/
 run_server_in_docker.sh
 .gitignore
 k8s/
+build/
+dist/
 docker_build_and_push.sh
+*.egg-info/

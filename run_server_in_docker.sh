@@ -11,8 +11,8 @@ fi
 docker run --name sidewinder-server \
        --rm \
        --publish 8765:8765 \
-       --volume $(${READLINK_COMMAND} --canonicalize ./data):/home/app_user/data \
+       --volume $(${READLINK_COMMAND} --canonicalize ./data):/opt/sidewinder/data \
        --interactive \
        --tty \
        prmoorevoltron/sidewinder:latest \
-       python -m server
+       sidewinder-server
