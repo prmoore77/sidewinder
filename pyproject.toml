@@ -62,6 +62,8 @@ sidewinder-client = "sidewinder.client:main"
 current_version = "0.0.3"
 version_pattern = "MAJOR.MINOR.PATCH[PYTAGNUM]"
 commit_message = "bump version {old_version} -> {new_version}"
+commit = true
+tag = true
 
 [tool.bumpver.file_patterns]
 "pyproject.toml" = [
