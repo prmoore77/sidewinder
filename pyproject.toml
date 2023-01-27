@@ -8,7 +8,7 @@ include = ["sidewinder*"]  # package names should match these glob patterns (["*
 
 [project]
 name = "sidewinder-db"
-version = "0.0.3"
+version = "0.0.4"
 description = "A Python-based Distributed Database"
 readme = "README.md"
 authors = [{ name = "Philip Moore", email = "prmoore77@hotmail.com" }]
@@ -59,7 +59,7 @@ sidewinder-worker = "sidewinder.worker:main"
 sidewinder-client = "sidewinder.client:main"
 
 [tool.bumpver]
-current_version = "0.0.3"
+current_version = "0.0.4"
 version_pattern = "MAJOR.MINOR.PATCH[PYTAGNUM]"
 commit_message = "bump version {old_version} -> {new_version}"
 commit = true
