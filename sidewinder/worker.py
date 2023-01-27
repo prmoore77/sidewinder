@@ -15,11 +15,11 @@ from munch import Munch, munchify
 from sidewinder.config import logger
 from sidewinder.constants import DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, SHARD_CONFIRMATION, SHARD_DATASET, INFO, QUERY, ERROR, RESULT, WORKER_FAILED, WORKER_SUCCESS
 from sidewinder.utils import coro, pyarrow, get_dataframe_results_as_base64_str, get_cpu_count, get_memory_limit, copy_database_file
-
+from sidewinder import __version__ as sidewinder_version
 
 # Constants
 CTAS_RETRY_LIMIT = 3
-SIDEWINDER_WORKER_VERSION = "0.0.1"
+SIDEWINDER_WORKER_VERSION = sidewinder_version
 
 
 class Worker:

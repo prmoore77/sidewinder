@@ -21,9 +21,10 @@ from sidewinder.constants import SHARD_CONFIRMATION, STARTED, DISTRIBUTED, FAILE
     SHARD_DATASET, RESULT
 from sidewinder.parser.query import Query
 from sidewinder.utils import combine_bytes_results, get_s3_files, get_files, coro, get_cpu_count, get_memory_limit, run_query, pyarrow
+from sidewinder import __version__ as sidewinder_version
 
 # Misc. Constants
-SIDEWINDER_SERVER_VERSION = "0.0.1"
+SIDEWINDER_SERVER_VERSION = sidewinder_version
 
 
 class Shard:

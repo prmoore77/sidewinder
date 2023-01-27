@@ -17,9 +17,10 @@ from websockets.version import version as websockets_version
 from sidewinder.utils import get_dataframe_from_bytes
 
 import pandas as pd
+from sidewinder import __version__ as sidewinder_version
 
 # Misc. Constants
-SIDEWINDER_CLIENT_VERSION = "0.0.1"
+SIDEWINDER_CLIENT_VERSION = sidewinder_version
 
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
