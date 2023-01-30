@@ -1,9 +1,8 @@
 name: sidewinder-ci
 
 on:
-  push:
-    branches:
-      - 'main'
+  release:
+    types: [published]
 
 jobs:
   build-n-publish:
