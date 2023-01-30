@@ -1,4 +1,4 @@
-[![sidewinder-ci](https://github.com/prmoore77/sidewinder/actions/workflows/ci.yml/badge.svg)](https://github.com/prmoore77/sidewinder/actions/workflows/ci.yml)[![Supported Python Versions](https://img.shields.io/pypi/pyversions/duckdb-engine)](https://pypi.org/project/duckdb-engine/)[![PyPI version](https://badge.fury.io/py/sidewinder-db.svg)](https://badge.fury.io/py/sidewinder-db)[![PyPI Downloads](https://img.shields.io/pypi/dm/sidewinder-db.svg)](https://pypi.org/project/sidewinder-db/)
+[![sidewinder-ci](https://github.com/prmoore77/sidewinder/actions/workflows/ci.yml/badge.svg)](https://github.com/prmoore77/sidewinder/actions/workflows/ci.yml) [![Supported Python Versions](https://img.shields.io/pypi/pyversions/duckdb-engine)](https://pypi.org/project/duckdb-engine/) [![PyPI version](https://badge.fury.io/py/sidewinder-db.svg)](https://badge.fury.io/py/sidewinder-db) [![PyPI Downloads](https://img.shields.io/pypi/dm/sidewinder-db.svg)](https://pypi.org/project/sidewinder-db/)
 
 # Sidewinder
 Python-based Distributed Database
