@@ -41,6 +41,7 @@ jobs:
           password: ${{ secrets.PYPI_API_TOKEN }}
 
   docker:
+    name: Build and publish Docker image to DockerHub
     runs-on: ubuntu-latest
     steps:
       -
