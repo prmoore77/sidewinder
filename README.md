@@ -1,3 +1,4 @@
+[![sidewinder-ci](https://github.com/prmoore77/sidewinder/actions/workflows/ci.yml/badge.svg)](https://github.com/prmoore77/sidewinder/actions/workflows/ci.yml)
 # Sidewinder
 Python-based Distributed Database
 
