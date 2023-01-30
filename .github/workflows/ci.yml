@@ -4,9 +4,6 @@ on:
   release:
     types:
       - published
-  push:
-    branches:
-      - main
 
 jobs:
   build-n-publish:
