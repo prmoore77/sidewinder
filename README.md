@@ -79,9 +79,20 @@ Be sure to activate the virtual environment before running the executables
 ```sidewinder-server```
 
 ### 2) Worker:
-#### Open another terminal, then:
+#### Open another terminal, then start a single worker with command:
 ```sidewinder-worker```
-##### Note: you can run up to 11 workers for this example configuration... 
+##### Note: you can run up to 11 workers for this example configuration, to do that do this instead of starting a single-worker:
+```bash
+for x in {1..11}:
+do
+  sidewinder-worker &
+done
+```
+
+To kill the workers later - run:
+```bash
+kill $(jobs -p)
+```
 
 ### 3) Client:
 #### Open another terminal, then:
