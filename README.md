@@ -1,6 +1,12 @@
-[![sidewinder-ci](https://github.com/prmoore77/sidewinder/actions/workflows/ci.yml/badge.svg)](https://github.com/prmoore77/sidewinder/actions/workflows/ci.yml) [![Supported Python Versions](https://img.shields.io/pypi/pyversions/sidewinder-db)](https://pypi.org/project/sidewinder-db/) [![PyPI version](https://badge.fury.io/py/sidewinder-db.svg)](https://badge.fury.io/py/sidewinder-db) [![PyPI Downloads](https://img.shields.io/pypi/dm/sidewinder-db.svg)](https://pypi.org/project/sidewinder-db/)
-
 # Sidewinder
+
+[<img src="https://img.shields.io/badge/GitHub-prmoore77%2Fsidewinder-blue.svg?logo=Github">](https://github.com/prmoore77/sidewinder)
+[<img src="https://img.shields.io/badge/dockerhub-image-green.svg?logo=Docker">](https://hub.docker.com/repository/docker/prmoorevoltron/sidewinder/general)
+[![sidewinder-ci](https://github.com/prmoore77/sidewinder/actions/workflows/ci.yml/badge.svg)](https://github.com/prmoore77/sidewinder/actions/workflows/ci.yml)
+[![Supported Python Versions](https://img.shields.io/pypi/pyversions/sidewinder-db)](https://pypi.org/project/sidewinder-db/)
+[![PyPI version](https://badge.fury.io/py/sidewinder-db.svg)](https://badge.fury.io/py/sidewinder-db)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/sidewinder-db.svg)](https://pypi.org/project/sidewinder-db/)
+
 Python-based Distributed Database
 
 Sidewinder is a [Python](https://python.org)-based (with [asyncio](https://docs.python.org/3/library/asyncio.html)) Proof-of-Concept Distributed Database that distributes shards of data from the server to a number of workers to "divide and conquer" OLAP database workloads.
