@@ -46,12 +46,12 @@ pip install sidewinder-db
 ```
 
 ### DuckDB CLI
-Install DuckDB CLI version [0.6.1](https://github.com/duckdb/duckdb/releases/tag/v0.6.1) - and make sure the executable is on your PATH.
+Install DuckDB CLI version [0.7.0](https://github.com/duckdb/duckdb/releases/tag/v0.7.0) - and make sure the executable is on your PATH.
 
 Platform Downloads:   
-[Linux x86-64](https://github.com/duckdb/duckdb/releases/download/v0.6.1/duckdb_cli-linux-amd64.zip)   
-[Linux arm64 (aarch64)](https://github.com/duckdb/duckdb/releases/download/v0.6.1/duckdb_cli-linux-aarch64.zip)   
-[MacOS Universal](https://github.com/duckdb/duckdb/releases/download/v0.6.1/duckdb_cli-osx-universal.zip)   
+[Linux x86-64](https://github.com/duckdb/duckdb/releases/download/v0.7.0/duckdb_cli-linux-amd64.zip)   
+[Linux arm64 (aarch64)](https://github.com/duckdb/duckdb/releases/download/v0.7.0/duckdb_cli-linux-aarch64.zip)   
+[MacOS Universal](https://github.com/duckdb/duckdb/releases/download/v0.7.0/duckdb_cli-osx-universal.zip)   
 
 ## Generate source sample TPC-H (Scale Factor 1) data (only possible from repo currently, not PyPi package)
 Note: If running on MacOS - you'll need to have [homebrew](https://brew.sh) installed, then install coreutils with:  
