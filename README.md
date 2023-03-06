@@ -31,7 +31,7 @@ git clone https://github.com/prmoore77/sidewinder
 ### Python
 Create a new Python 3.8+ virtual environment and install sidewinder-db with:
 ```shell
-cd sidewinder
+cd src
 # Create the virtual environment
 python3 -m venv ./venv
 # Activate the virtual environment
@@ -42,7 +42,7 @@ pip install .
 
 #### Alternative installation from PyPi
 ```shell
-pip install sidewinder-db
+pip install src-db
 ```
 
 ### DuckDB CLI
@@ -70,7 +70,7 @@ scripts/create_duckdb_database.sh 1
 Next - you need to generate some shards - in this case we'll just generate 11 shards (we need an odd number for even distribution due to DuckDB's hash function):
 ```
 pushd shard_generation
-python -m build_shard_duckdb --shard-count=11 --source-data-path="../data/tpch/1" --output-data-path="../data/shards/tpch/1"
+python -m build_shard --shard-count=11 --source-data-path="../data/tpch/1" --output-data-path="../data/shards/tpch/1"
 popd
 ```
 
@@ -91,7 +91,7 @@ Be sure to activate the virtual environment before running the executables
 ```bash
 for x in {1..11}:
 do
-  sidewinder-worker &
+  src-worker &
 done
 ```
 

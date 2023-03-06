@@ -1,4 +1,4 @@
-# Default values for sidewinder.
+# Default values for src.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
@@ -10,7 +10,7 @@ server:
   replicaCount: 1
 
   image:
-    repository: prmoorevoltron/sidewinder
+    repository: prmoorevoltron/src
     pullPolicy: Always
     # Overrides the image tag whose default is the chart appVersion.
     tag: latest
@@ -48,7 +48,7 @@ server:
     alpha.eksctl.io/nodegroup-name: graviton-cpu-node-group
 
   tolerations:
-    - key: sidewinder
+    - key: src
       operator: Equal
       value: "true"
       effect: NoSchedule
@@ -57,7 +57,7 @@ server:
 
 worker:
   image:
-    repository: prmoorevoltron/sidewinder
+    repository: prmoorevoltron/src
     pullPolicy: Always
     # Overrides the image tag whose default is the chart appVersion.
     tag: latest
@@ -95,7 +95,7 @@ worker:
     alpha.eksctl.io/nodegroup-name: graviton-cpu-node-group
 
   tolerations:
-    - key: sidewinder
+    - key: src
       operator: Equal
       value: "true"
       effect: NoSchedule
@@ -106,7 +106,7 @@ client:
   replicaCount: 1
 
   image:
-    repository: prmoorevoltron/sidewinder
+    repository: prmoorevoltron/src
     pullPolicy: Always
     # Overrides the image tag whose default is the chart appVersion.
     tag: latest
@@ -144,7 +144,7 @@ client:
     alpha.eksctl.io/nodegroup-name: graviton-cpu-node-group
 
   tolerations:
-    - key: sidewinder
+    - key: src
       operator: Equal
       value: "true"
       effect: NoSchedule

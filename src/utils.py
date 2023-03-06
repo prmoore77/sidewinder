@@ -9,7 +9,7 @@ import psutil
 
 import pyarrow
 import duckdb
-from sidewinder.config import logger
+from src.config import logger
 import os
 
 
@@ -135,18 +135,18 @@ async def get_s3_files(shard_data_path):
 
         for file in files:
             file_name = file['Key']
-            if file_path in file_name and re.search(pattern="\.tar.gz$", string=file_name):
+            if file_path in file_name and re.search(pattern=r"\.tar\.std$", string=file_name):
                 s3_files.append(f"s3://{bucket_name}/{file_name}")
 
     return s3_files
 
 
-async def get_files(shard_data_path):
+async def get_shard_files(shard_data_path, file_naming_pattern=r"\.tar\.zst$"):
     dir_list = os.listdir(path=shard_data_path)
 
     files = []
     for file in dir_list:
-        if re.search(pattern="\.tar.gz$", string=file):
+        if re.search(pattern=file_naming_pattern, string=file):
             files.append(os.path.join(shard_data_path, file))
 
     return files
@@ -156,7 +156,7 @@ async def copy_database_file(source_path: str, target_path: str) -> str:
     target_file_name = source_path.split("/")[-1]
     local_database_file_name = os.path.join(target_path, target_file_name)
 
-    if re.search("^s3://", source_path):
+    if re.search(r"^s3://", source_path):
         await download_s3_file(src=source_path, dst=local_database_file_name)
     else:
         shutil.copy(src=source_path, dst=local_database_file_name)

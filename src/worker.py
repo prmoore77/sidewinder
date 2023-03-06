@@ -5,17 +5,18 @@ import re
 import sys
 import tarfile
 from tempfile import TemporaryDirectory
+from pathlib import Path
 
 import click
 import duckdb
-import mgzip
+import zstandard
 import websockets
 from munch import Munch, munchify
 
-from sidewinder.config import logger
-from sidewinder.constants import DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, SHARD_CONFIRMATION, SHARD_DATASET, INFO, QUERY, ERROR, RESULT, WORKER_FAILED, WORKER_SUCCESS
-from sidewinder.utils import coro, pyarrow, get_dataframe_results_as_base64_str, get_cpu_count, get_memory_limit, copy_database_file
-from sidewinder import __version__ as sidewinder_version
+from src.config import logger
+from src.constants import DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, SHARD_CONFIRMATION, SHARD_DATASET, INFO, QUERY, ERROR, RESULT, WORKER_FAILED, WORKER_SUCCESS
+from src.utils import coro, pyarrow, get_dataframe_results_as_base64_str, get_cpu_count, get_memory_limit, copy_database_file
+from src import __version__ as sidewinder_version
 
 # Constants
 CTAS_RETRY_LIMIT = 3
@@ -45,23 +46,30 @@ class Worker:
 
         self.version = SIDEWINDER_WORKER_VERSION
 
-    async def build_database_from_tarfile(self,
-                                          tarfile_path: str
-                                          ):
-        logger.info(msg=f"Extract tarfile: '{tarfile_path}' contents to directory: '{self.local_database_dir}'")
-        with mgzip.open(tarfile_path, "rt", thread=self.duckdb_threads) as gz:
-            with tarfile.open(name=gz.name) as tar:
-                database_dir_name = tar.getmembers()[0].name
-                tar.extractall(path=self.local_database_dir)
+    async def build_database_from_compressed_tarfile(self,
+                                                     compressed_tarfile_name: str
+                                                     ):
+        logger.info(msg=f"Extract compressed tarfile: '{compressed_tarfile_name}' contents to directory: '{self.local_database_dir}'")
 
-        database_full_path = os.path.join(self.local_database_dir, database_dir_name)
+        compressed_tarfile = Path(compressed_tarfile_name)
+
+        with compressed_tarfile.open("rb") as fh:
+            dctx = zstandard.ZstdDecompressor()
+            with dctx.stream_reader(fh) as reader:
+                with tarfile.open(mode="r|", fileobj=reader) as tar:
+                    tar.extractall(path=self.local_database_dir)
+
+        # Delete the compressed file..
+        compressed_tarfile.unlink()
+
+        database_full_path = next(f.path for f in os.scandir(self.local_database_dir) if f.is_dir())
 
         database_dir_file_list = os.listdir(path=database_full_path)
 
         db_connection = duckdb.connect(database=":memory:")
 
         for file in database_dir_file_list:
-            if re.search(pattern="\.parquet$", string=file):
+            if re.search(pattern=r"\.parquet$", string=file):
                 file_full_path = os.path.join(database_full_path, file)
                 table_name = file.split(".")[0]
                 sql_text = (f"CREATE VIEW {table_name} AS "
@@ -87,7 +95,7 @@ class Worker:
                                                                        target_path=self.local_database_dir
                                                                        )
 
-        db_connection = await self.build_database_from_tarfile(tarfile_path=self.local_shard_database_file_name)
+        db_connection = await self.build_database_from_compressed_tarfile(compressed_tarfile_name=self.local_shard_database_file_name)
 
         db_connection.execute(query=f"PRAGMA threads={self.duckdb_threads}")
         db_connection.execute(query=f"PRAGMA memory_limit='{self.duckdb_memory_limit}b'")

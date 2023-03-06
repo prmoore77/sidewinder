@@ -1,14 +1,14 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "sidewinder.fullname" . }}-server
+  name: {{ include "src.fullname" . }}-server
   labels:
-    {{- include "sidewinder.labels" . | nindent 4 }}
+    {{- include "src.labels" . | nindent 4 }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      {{- include "sidewinder.selectorLabels" . | nindent 6 }}
+      {{- include "src.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       annotations:
@@ -17,12 +17,12 @@ spec:
           {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
-        {{- include "sidewinder.selectorLabels" . | nindent 8 }}
+        {{- include "src.selectorLabels" . | nindent 8 }}
     spec:
       volumes:
         - name: local-volume
           persistentVolumeClaim:
-            claimName: {{ include "sidewinder.fullname" . }}-local-volume-claim
+            claimName: {{ include "src.fullname" . }}-local-volume-claim
       {{- with .Values.server.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -33,15 +33,15 @@ spec:
         - name: {{ .Chart.Name }}
           command: [ "/bin/bash" ]
           # args: [ "-c", "sleep infinity" ]
-          args: [ "-c", "sidewinder-server" ]
+          args: [ "-c", "src-server" ]
           volumeMounts:
             - name: local-volume
-              mountPath: /opt/sidewinder/data
+              mountPath: /opt/src/data
           env:
             - name: DATABASE_FILE
-              value: /opt/sidewinder/data/tpch_{{ .Values.server.config.tpchScale }}.db
+              value: /opt/src/data/tpch_{{ .Values.server.config.tpchScale }}.db
             - name: SHARD_DATA_PATH
-              value: s3://voltrondata-sidewinder/shards/tpch/{{ .Values.server.config.tpchScale }}
+              value: s3://voltrondata-src/shards/tpch/{{ .Values.server.config.tpchScale }}
             - name: PING_TIMEOUT
               value: {{ .Values.server.config.pingTimeout | quote }}
           securityContext:

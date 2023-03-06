@@ -1,4 +1,4 @@
-SELECT sum(l_extendedprice) AS avg_yearly /* divides by 7 also - but sidewinder won't distribute */
+SELECT sum(l_extendedprice) AS avg_yearly /* divides by 7 also - but src won't distribute */
 FROM lineitem,
      part
 WHERE p_partkey = l_partkey

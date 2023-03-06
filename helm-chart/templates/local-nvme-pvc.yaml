@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "sidewinder.fullname" . }}-local-volume-claim
+  name: {{ include "src.fullname" . }}-local-volume-claim
   annotations:
     "helm.sh/resource-policy": keep
 spec:

@@ -16,12 +16,12 @@ import duckdb
 import websockets
 from munch import Munch
 
-from sidewinder.config import logger
-from sidewinder.constants import SHARD_CONFIRMATION, STARTED, DISTRIBUTED, FAILED, COMPLETED, WORKER_SUCCESS, WORKER_FAILED, DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, \
+from src.config import logger
+from src.constants import SHARD_CONFIRMATION, STARTED, DISTRIBUTED, FAILED, COMPLETED, WORKER_SUCCESS, WORKER_FAILED, DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, \
     SHARD_DATASET, RESULT
-from sidewinder.parser.query import Query
-from sidewinder.utils import combine_bytes_results, get_s3_files, get_files, coro, get_cpu_count, get_memory_limit, run_query, pyarrow
-from sidewinder import __version__ as sidewinder_version
+from src.parser.query import Query
+from src.utils import combine_bytes_results, get_s3_files, get_shard_files, coro, get_cpu_count, get_memory_limit, run_query, pyarrow
+from src import __version__ as sidewinder_version
 
 # Misc. Constants
 SIDEWINDER_SERVER_VERSION = sidewinder_version
@@ -35,10 +35,10 @@ class Shard:
 
     @classmethod
     async def get_shards(cls, shard_data_path):
-        if re.search(pattern="^s3://", string=shard_data_path):
+        if re.search(pattern=r"^s3://", string=shard_data_path):
             shard_files = await get_s3_files(shard_data_path=shard_data_path)
         else:
-            shard_files = await get_files(shard_data_path=shard_data_path)
+            shard_files = await get_shard_files(shard_data_path=shard_data_path)
 
         shards = Munch()
         for shard_file in shard_files:
@@ -112,7 +112,7 @@ class SidewinderServer:
                                     ):
             await asyncio.Future()  # run forever
 
-    async def get_next_shard(self):
+    async def get_next_shard(self) -> Shard:
         shard = None
         for shard_id, shard in self.shards.items():
             if not shard.distributed:
@@ -174,7 +174,7 @@ class SidewinderSQLClient:
 
     async def set_client_attribute(self, message):
         try:
-            match = re.search(pattern='^\.set (\S+)\s*=\s*(\S+)\s*$', string=message.rstrip(' ;/'))
+            match = re.search(pattern=r'^\.set (\S+)\s*=\s*(\S+)\s*$', string=message.rstrip(' ;/'))
             setting = match[1].lower()
             value = match[2].upper()
 
@@ -200,7 +200,7 @@ class SidewinderSQLClient:
                 if message:
                     logger.info(msg=f"Message received from SQL client: '{self.sql_client_id}' - '{message}'")
 
-                    if re.search(pattern='^\.set ', string=message):
+                    if re.search(pattern=r'^\.set ', string=message):
                         await self.set_client_attribute(message=message)
                     else:
                         query = SidewinderQuery(sql=message,
@@ -470,7 +470,7 @@ class SidewinderWorker:
 @click.option(
     "--database-file",
     type=str,
-    default=os.getenv("DATABASE_FILE", "data/tpch_1.db"),
+    default=os.getenv("DATABASE_FILE", "data/tpch_1.duckdb"),
     show_default=True,
     required=True,
     help="The source parquet data file path to use."

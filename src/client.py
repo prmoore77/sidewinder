@@ -14,10 +14,10 @@ from websockets.frames import Close
 from websockets.legacy.client import connect
 from websockets.version import version as websockets_version
 
-from sidewinder.utils import get_dataframe_from_bytes
+from src.utils import get_dataframe_from_bytes
 
 import pandas as pd
-from sidewinder import __version__ as sidewinder_version
+from src import __version__ as sidewinder_version
 
 # Misc. Constants
 SIDEWINDER_CLIENT_VERSION = sidewinder_version
@@ -242,7 +242,7 @@ def main() -> None:
                     lines.append(line)
 
                 # Search for a SQL terminator
-                if re.search("(;|^/)\s*$", line):
+                if re.search(r"(;|^/)\s*$", line):
                     break
             message = '\n'.join(lines)
 

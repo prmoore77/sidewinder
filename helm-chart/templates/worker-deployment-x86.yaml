@@ -1,14 +1,14 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "sidewinder.fullname" . }}-worker-x86
+  name: {{ include "src.fullname" . }}-worker-x86
   labels:
-    {{- include "sidewinder.labels" . | nindent 4 }}
+    {{- include "src.labels" . | nindent 4 }}
 spec:
   replicas: 0 # {{ .Values.server.config.shardCount }}
   selector:
     matchLabels:
-      {{- include "sidewinder.selectorLabels" . | nindent 6 }}
+      {{- include "src.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       annotations:
@@ -17,7 +17,7 @@ spec:
           {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
-        {{- include "sidewinder.selectorLabels" . | nindent 8 }}
+        {{- include "src.selectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.worker.imagePullSecrets }}
       imagePullSecrets:
@@ -49,7 +49,7 @@ spec:
           args: [ "-c", "python -m worker" ]
           env:
             - name: SERVER_URL
-              value: ws://{{ include "sidewinder.fullname" . }}:{{ .Values.server.service.port }}/worker
+              value: ws://{{ include "src.fullname" . }}:{{ .Values.server.service.port }}/worker
           securityContext:
             {{- toYaml .Values.worker.securityContext | nindent 12 }}
           image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag | default .Chart.AppVersion }}"

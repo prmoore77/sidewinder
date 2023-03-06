@@ -69,9 +69,9 @@ RUN mkdir --parents ${SRC_DIR}
 WORKDIR ${SRC_DIR}
 
 COPY --chown=app_user:app_user pyproject.toml .
-COPY --chown=app_user:app_user sidewinder ./sidewinder
+COPY --chown=app_user:app_user src ./sidewinder
 
-# Install the sidewinder package
+# Install the src package
 RUN pip install . && \
     rm -rf ${SRC_DIR}
 

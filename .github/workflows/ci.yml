@@ -1,4 +1,4 @@
-name: sidewinder-ci
+name: src-ci
 
 on:
   release:
@@ -62,4 +62,4 @@ jobs:
         with:
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: prmoorevoltron/sidewinder:latest
+          tags: prmoorevoltron/src:latest
