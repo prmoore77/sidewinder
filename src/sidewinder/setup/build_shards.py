@@ -263,4 +263,4 @@ if __name__ == "__main__":
 
 # Example call:
 # python -m build_shard_duckdb --shard-count=1001 --min-shard=901 --max-shard=1001 --source-data-path="/home/app_user/data/tpch_10000"
-# --output-data-path="s3://voltrondata-src/shards/tpch/10000" --working-temporary-dir="/home/app_user/data"
+# --output-data-path="s3://voltrondata-sidewinder/shards/tpch/10000" --working-temporary-dir="/home/app_user/data"
