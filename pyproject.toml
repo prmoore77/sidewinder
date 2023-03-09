@@ -74,6 +74,6 @@ tag = true
     '^version = "{version}"$',
     '^current_version = "{version}"$',
 ]
-"sidewinder/__init__.py" = [
+"src/sidewinder/__init__.py" = [
     '^__version__ = "{version}"$',
 ]
