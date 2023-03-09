@@ -62,24 +62,8 @@ RUN python3 -m venv ${VIRTUAL_ENV} && \
 # Set the PATH so that the Python Virtual environment is referenced for subsequent RUN steps (hat tip: https://pythonspeed.com/articles/activate-virtualenv-dockerfile/)
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
-# Copy source code files
-ARG SRC_DIR="/tmp/sidewinder"
-RUN mkdir --parents ${SRC_DIR}
-
-WORKDIR ${SRC_DIR}
-
-COPY --chown=app_user:app_user pyproject.toml .
-COPY --chown=app_user:app_user src ./sidewinder
-
-# Install the src package
-RUN pip install . && \
-    rm -rf ${SRC_DIR}
-
-WORKDIR ${APP_DIR}
-
-# Install helpful scripts and utilities
-COPY --chown=app_user:app_user scripts ./scripts
-COPY --chown=app_user:app_user shard_generation ./shard_generation
+# Install the PyPi package
+RUN pip install sidewinder-db
 
 # Open web-socket port
 EXPOSE 8765

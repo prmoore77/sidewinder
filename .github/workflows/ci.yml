@@ -42,6 +42,7 @@ jobs:
 
   docker:
     name: Build and publish Docker image to DockerHub
+    needs: build-n-publish
     runs-on: ubuntu-latest
     steps:
       -
