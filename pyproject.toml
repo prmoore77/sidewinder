@@ -9,6 +9,9 @@ include-package-data = true
 where = ["./src"]  # list of folders that contain the packages (["."] by default)
 include = ["*"]  # package names should match these glob patterns (["*"] by default)
 
+[tool.setuptools.package-data]
+"*" = ["*.yaml"]
+
 [project]
 name = "sidewinder-db"
 version = "0.0.10"
