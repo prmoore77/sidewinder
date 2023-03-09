@@ -13,10 +13,9 @@ import zstandard
 from codetiming import Timer
 from munch import munchify, Munch
 
-from src.config import logger
-from src.utils import get_cpu_count, get_memory_limit
-from .utils import DATA_DIR
-
+from .data_creation_utils import DATA_DIR, SCRIPT_DIR
+from ..config import logger
+from ..utils import get_cpu_count, get_memory_limit
 
 # Constants
 TIMER_TEXT = "{name}: Elapsed time: {:.4f} seconds"
@@ -172,7 +171,7 @@ def build_shards(shard_definition_file: str,
 @click.option(
     "--shard-definition-file",
     type=str,
-    default="src/setup/config/tpch_shard_generation_queries.yaml",
+    default=(SCRIPT_DIR / "config" / "tpch_shard_generation_queries.yaml").as_posix(),
     required=True,
     help="The file that contains the tables for the shard data model, and the queries used to create them for the shard."
 )

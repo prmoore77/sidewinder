@@ -13,10 +13,10 @@ import zstandard
 import websockets
 from munch import Munch, munchify
 
-from src.config import logger
-from src.constants import DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, SHARD_CONFIRMATION, SHARD_DATASET, INFO, QUERY, ERROR, RESULT, WORKER_FAILED, WORKER_SUCCESS
-from src.utils import coro, pyarrow, get_dataframe_results_as_base64_str, get_cpu_count, get_memory_limit, copy_database_file
-from src import __version__ as sidewinder_version
+from .config import logger
+from .constants import DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, SHARD_CONFIRMATION, SHARD_DATASET, INFO, QUERY, ERROR, RESULT, WORKER_FAILED, WORKER_SUCCESS
+from .utils import coro, pyarrow, get_dataframe_results_as_base64_str, get_cpu_count, get_memory_limit, copy_database_file
+from . import __version__ as sidewinder_version
 
 # Constants
 CTAS_RETRY_LIMIT = 3

@@ -14,10 +14,10 @@ from websockets.frames import Close
 from websockets.legacy.client import connect
 from websockets.version import version as websockets_version
 
-from src.utils import get_dataframe_from_bytes
+from .utils import get_dataframe_from_bytes
 
 import pandas as pd
-from src import __version__ as sidewinder_version
+from . import __version__ as sidewinder_version
 
 # Misc. Constants
 SIDEWINDER_CLIENT_VERSION = sidewinder_version

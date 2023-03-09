@@ -16,12 +16,12 @@ import duckdb
 import websockets
 from munch import Munch
 
-from src.config import logger
-from src.constants import SHARD_CONFIRMATION, STARTED, DISTRIBUTED, FAILED, COMPLETED, WORKER_SUCCESS, WORKER_FAILED, DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, \
+from . import __version__ as sidewinder_version
+from .config import logger
+from .constants import SHARD_CONFIRMATION, STARTED, DISTRIBUTED, FAILED, COMPLETED, WORKER_SUCCESS, WORKER_FAILED, DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, \
     SHARD_DATASET, RESULT
-from src.parser.query import Query
-from src.utils import combine_bytes_results, get_s3_files, get_shard_files, coro, get_cpu_count, get_memory_limit, run_query, pyarrow
-from src import __version__ as sidewinder_version
+from .parser.query import Query
+from .utils import combine_bytes_results, get_s3_files, get_shard_files, coro, get_cpu_count, get_memory_limit, run_query, pyarrow
 
 # Misc. Constants
 SIDEWINDER_SERVER_VERSION = sidewinder_version

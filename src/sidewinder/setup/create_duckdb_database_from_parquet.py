@@ -1,8 +1,8 @@
-from src.utils import logger
+from ..utils import logger
 import duckdb
 import click
 from pathlib import Path
-from .utils import execute_query, DATA_DIR, get_printable_number, pushd
+from .data_creation_utils import execute_query, DATA_DIR, get_printable_number, pushd
 
 
 # Constants
