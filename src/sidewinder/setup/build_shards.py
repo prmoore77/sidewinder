@@ -173,12 +173,14 @@ def build_shards(shard_definition_file: str,
     type=str,
     default=(SCRIPT_DIR / "config" / "tpch_shard_generation_queries.yaml").as_posix(),
     required=True,
+    show_default=True,
     help="The file that contains the tables for the shard data model, and the queries used to create them for the shard."
 )
 @click.option(
     "--shard-count",
     type=int,
     default=os.getenv("SHARD_COUNT"),
+    show_default=True,
     required=True,
     help="How many shards to generate."
 )
@@ -186,6 +188,7 @@ def build_shards(shard_definition_file: str,
     "--min-shard",
     type=int,
     default=1,
+    show_default=True,
     required=True,
     help="Minimum shard ID to generate."
 )
@@ -193,12 +196,14 @@ def build_shards(shard_definition_file: str,
     "--max-shard",
     type=int,
     default=None,
+    show_default=True,
     help="Maximum shard ID to generate."
 )
 @click.option(
     "--source-data-path",
     type=str,
     default=os.getenv("SOURCE_DATA_PATH", (DATA_DIR / "tpch" / "1").as_posix()),
+    show_default=True,
     required=True,
     help="The source parquet data path"
 )
@@ -206,6 +211,7 @@ def build_shards(shard_definition_file: str,
     "--output-data-path",
     type=str,
     default=os.getenv("OUTPUT_DATA_PATH", (DATA_DIR / "shards" / "tpch" / "1").as_posix()),
+    show_default=True,
     required=True,
     help="The target database output path"
 )
@@ -234,6 +240,7 @@ def build_shards(shard_definition_file: str,
     "--working-temporary-dir",
     type=str,
     default="/tmp",
+    show_default=True,
     required=True,
     help="The working temporary directory (use nvme for speed)"
 )
@@ -241,6 +248,7 @@ def build_shards(shard_definition_file: str,
     "--overwrite/--no-overwrite",
     type=bool,
     default=False,
+    show_default=True,
     required=True,
     help="Can we overwrite the target shard directory if it already exists..."
 )

@@ -67,6 +67,7 @@ def create_duckdb_database_from_parquet(tpch_scale_factor: int,
     "--tpch-scale-factor",
     type=float,
     default=1,
+    show_default=True,
     required=True,
     help="The TPC-H scale factor to generate."
 )
@@ -74,6 +75,7 @@ def create_duckdb_database_from_parquet(tpch_scale_factor: int,
     "--data-directory",
     type=str,
     default=DATA_DIR.as_posix(),
+    show_default=True,
     required=True,
     help=("The data directory containing the parquet files (will look for a sub-directory "
           f"with name: {DATA_DIR.as_posix()}/{{tpch-scale-factor}}.  "
@@ -84,6 +86,7 @@ def create_duckdb_database_from_parquet(tpch_scale_factor: int,
     "--overwrite/--no-overwrite",
     type=bool,
     default=False,
+    show_default=True,
     required=True,
     help="Can we overwrite the target database file if it already exists..."
 )

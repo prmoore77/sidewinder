@@ -69,6 +69,7 @@ def generate_tpch_parquet_data(tpch_scale_factor: int,
     "--tpch-scale-factor",
     type=float,
     default=1,
+    show_default=True,
     required=True,
     help="The TPC-H scale factor to generate."
 )
@@ -76,6 +77,7 @@ def generate_tpch_parquet_data(tpch_scale_factor: int,
     "--data-directory",
     type=str,
     default=DATA_DIR.as_posix(),
+    show_default=True,
     required=True,
     help="The target output data directory to put the files into"
 )
@@ -83,6 +85,7 @@ def generate_tpch_parquet_data(tpch_scale_factor: int,
     "--overwrite/--no-overwrite",
     type=bool,
     default=False,
+    show_default=True,
     required=True,
     help="Can we overwrite the target directory if it already exists..."
 )
