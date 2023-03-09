@@ -9,7 +9,7 @@
 
 Python-based Distributed Database
 
-### Note: Sidewinder is an experimental - and is not intended for Production workloads. 
+### Note: Sidewinder is experimental - and is not intended for Production workloads. 
 
 Sidewinder is a [Python](https://python.org)-based (with [asyncio](https://docs.python.org/3/library/asyncio.html)) Proof-of-Concept Distributed Database that distributes shards of data from the server to a number of workers to "divide and conquer" OLAP database workloads.
 
