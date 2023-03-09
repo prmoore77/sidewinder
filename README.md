@@ -42,56 +42,35 @@ pip install .
 
 #### Alternative installation from PyPi
 ```shell
-pip install src-db
+pip install sidewinder-db
 ```
 
-### DuckDB CLI
-Install DuckDB CLI version [0.7.1](https://github.com/duckdb/duckdb/releases/tag/v0.7.1) - and make sure the executable is on your PATH.
-
-Platform Downloads:   
-[Linux x86-64](https://github.com/duckdb/duckdb/releases/download/v0.7.1/duckdb_cli-linux-amd64.zip)   
-[Linux arm64 (aarch64)](https://github.com/duckdb/duckdb/releases/download/v0.7.1/duckdb_cli-linux-aarch64.zip)   
-[MacOS Universal](https://github.com/duckdb/duckdb/releases/download/v0.7.1/duckdb_cli-osx-universal.zip)   
-
-## Generate source sample TPC-H (Scale Factor 1) data (only possible from repo currently, not PyPi package)
-Note: If running on MacOS - you'll need to have [homebrew](https://brew.sh) installed, then install coreutils with:  
-```brew install coreutils```
-
-After that - you can create sample TPC-H source data for Scale Factor 1 (in parquet format) - run:
-```
-scripts/generate_tpch_data.sh 1
-```
-
-Next - you'll need to create a DuckDB database for the server (this is needed for the server to run queries that can't distribute) - run:
-```
-scripts/create_duckdb_database.sh 1
-```
-
-Next - you need to generate some shards - in this case we'll just generate 11 shards (we need an odd number for even distribution due to DuckDB's hash function):
-```
-pushd shard_generation
-python -m build_shard --shard-count=11 --source-data-path="../data/tpch/1" --output-data-path="../data/shards/tpch/1"
-popd
+## Bootstrap the environment by creating a sample TPC-H dataset with 11 shards
+```shell
+. ./venv/bin/activate
+sidewinder-bootstrap --tpch-scale-factor=1 --shard-count=11
 ```
 
 ## Run sidewinder locally - from root of repo (use --help option on the executables below for option details)
-### Setup
-Be sure to activate the virtual environment before running the executables
-```shell
-. ./venv/bin/activate
-```
 ### 1) Server:
 #### Open a terminal, then:
-```sidewinder-server```
+```bash
+. ./venv/bin/activate
+sidewinder-server
+```
 
 ### 2) Worker:
 #### Open another terminal, then start a single worker with command:
-```sidewinder-worker```
+```bash
+. ./venv/bin/activate
+sidewinder-worker
+```
 ##### Note: you can run up to 11 workers for this example configuration, to do that do this instead of starting a single-worker:
 ```bash
+. ./venv/bin/activate
 for x in {1..11}:
 do
-  src-worker &
+  sidewinder-worker &
 done
 ```
 
@@ -102,7 +81,10 @@ kill $(jobs -p)
 
 ### 3) Client:
 #### Open another terminal, then:
-```sidewinder-client```
+```
+. ./venv/bin/activate
+sidewinder-client
+```
 
 ##### Then - while in the client - you can run a sample query that will distribute to the worker(s) (if you have at least one running) - example:
 ```SELECT COUNT(*) FROM lineitem;```
@@ -120,3 +102,12 @@ kill $(jobs -p)
 
 ##### To turn summarization mode OFF in the client (so that sidewinder does NOT summarize the workers' results - this only applies to distributed mode):
 ```.set summarize = false;```
+
+### Optional DuckDB CLI (use for data QA purposes, etc.)
+Install DuckDB CLI version [0.7.1](https://github.com/duckdb/duckdb/releases/tag/v0.7.1) - and make sure the executable is on your PATH.
+
+Platform Downloads:   
+[Linux x86-64](https://github.com/duckdb/duckdb/releases/download/v0.7.1/duckdb_cli-linux-amd64.zip)   
+[Linux arm64 (aarch64)](https://github.com/duckdb/duckdb/releases/download/v0.7.1/duckdb_cli-linux-aarch64.zip)   
+[MacOS Universal](https://github.com/duckdb/duckdb/releases/download/v0.7.1/duckdb_cli-osx-universal.zip)   
+
