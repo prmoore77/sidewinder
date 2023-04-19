@@ -34,10 +34,16 @@ git clone https://github.com/prmoore77/sidewinder
 Create a new Python 3.8+ virtual environment and install sidewinder-db with:
 ```shell
 cd sidewinder
+
 # Create the virtual environment
 python3 -m venv ./venv
+
 # Activate the virtual environment
 . ./venv/bin/activate
+
+# Upgrade pip, setuptools, and wheel
+pip install --upgrade pip setuptools wheel
+
 # Install Sidewinder-DB
 pip install .
 ```
