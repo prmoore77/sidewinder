@@ -15,7 +15,7 @@ import os
 
 # taken from: https://donghao.org/2022/01/20/how-to-get-the-number-of-cpu-cores-inside-a-container/
 def get_cpu_count():
-    if os.path.isfile('/sys/fs/cgroup/memory/memory.limit_in_bytes'):
+    if os.path.isfile("/sys/fs/cgroup/cpu/cpu.cfs_quota_us"):
         with open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us") as fp:
             cfs_quota_us = int(fp.read())
         with open("/sys/fs/cgroup/cpu/cpu.cfs_period_us") as fp:
