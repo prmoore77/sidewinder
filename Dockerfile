@@ -55,14 +55,15 @@ WORKDIR ${APP_DIR}
 # Setup a Python Virtual environment
 ENV VIRTUAL_ENV=${APP_DIR}/venv
 RUN python3 -m venv ${VIRTUAL_ENV} && \
-    echo ". ${VIRTUAL_ENV}/bin/activate" >> ~/.bashrc && \
-    . ~/.bashrc && \
-    pip install --upgrade setuptools pip
+    echo ". ${VIRTUAL_ENV}/bin/activate" >> ~/.bashrc
 
 # Set the PATH so that the Python Virtual environment is referenced for subsequent RUN steps (hat tip: https://pythonspeed.com/articles/activate-virtualenv-dockerfile/)
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
-# Install the PyPi package
+# Upgrade pip, setuptools, and wheel
+RUN pip install --upgrade setuptools pip wheel
+
+# Install the Sidewinder PyPi package
 RUN pip install sidewinder-db
 
 # Open web-socket port
