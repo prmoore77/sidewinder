@@ -5,10 +5,12 @@ import json
 import os
 import platform
 import re
+import ssl
 import sys
 import uuid
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from datetime import datetime
+from pathlib import Path
 from uuid import UUID
 
 import click
@@ -19,9 +21,11 @@ from munch import Munch
 from . import __version__ as sidewinder_version
 from .config import logger
 from .constants import SHARD_CONFIRMATION, STARTED, DISTRIBUTED, FAILED, COMPLETED, WORKER_SUCCESS, WORKER_FAILED, DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, \
-    SHARD_DATASET, RESULT
+    SHARD_DATASET, RESULT, SERVER_PORT
 from .parser.query import Query
 from .utils import combine_bytes_results, get_s3_files, get_shard_files, coro, get_cpu_count, get_memory_limit, run_query, pyarrow
+from .security import SECRET_KEY
+
 
 # Misc. Constants
 SIDEWINDER_SERVER_VERSION = sidewinder_version
@@ -53,6 +57,8 @@ class Shard:
 class SidewinderServer:
     def __init__(self,
                  port: int,
+                 tls_certfile: Path,
+                 tls_keyfile: Path,
                  shard_data_path: str,
                  database_file: str,
                  duckdb_threads: int,
@@ -62,6 +68,8 @@ class SidewinderServer:
                  max_websocket_message_size: int
                  ):
         self.port = port
+        self.tls_certfile = tls_certfile
+        self.tls_keyfile = tls_keyfile
         self.shard_data_path = shard_data_path
         self.database_file = database_file
         self.duckdb_threads = duckdb_threads
@@ -76,6 +84,12 @@ class SidewinderServer:
         self.queries = Munch()
         self.version = SIDEWINDER_SERVER_VERSION
 
+        # Setup TLS/SSL if requested
+        self.ssl_context = None
+        if self.tls_certfile and self.tls_keyfile:
+            self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            self.ssl_context.load_cert_chain(certfile=self.tls_certfile, keyfile=self.tls_keyfile)
+
         # Asynch stuff
         self.event_loop = asyncio.get_event_loop()
         self.event_loop.set_default_executor(ThreadPoolExecutor())
@@ -88,6 +102,8 @@ class SidewinderServer:
         logger.info(
             msg=(f"Starting Sidewinder Server - version: {self.version} - (\n"
                  f" port: {self.port},\n"
+                 f" tls_certfile: {self.tls_certfile.resolve() if self.tls_certfile else 'None'},\n"
+                 f" tls_keyfile: {self.tls_keyfile.resolve() if self.tls_keyfile else 'None'},\n"
                  f" shard_data_path: '{self.shard_data_path}',\n"
                  f" database_file: '{self.database_file}',\n"
                  f" duckdb_threads: {self.duckdb_threads},\n"
@@ -103,12 +119,14 @@ class SidewinderServer:
         logger.info(f"Using DuckDB version: {duckdb.__version__}")
         logger.info(f"Using PyArrow version: {pyarrow.__version__}")
         logger.info(f"Using Websockets version: {websockets.__version__}")
+        logger.info(f"TLS: {'Enabled' if self.ssl_context else 'Disabled'}")
 
         async with websockets.serve(ws_handler=self.bound_handler,
                                     host="0.0.0.0",
                                     port=self.port,
                                     max_size=self.max_websocket_message_size,
-                                    ping_timeout=self.websocket_ping_timeout
+                                    ping_timeout=self.websocket_ping_timeout,
+                                    ssl=self.ssl_context
                                     ):
             await asyncio.Future()  # run forever
 
@@ -166,6 +184,7 @@ class SidewinderSQLClient:
         await self.websocket_connection.send((f"Client - successfully connected to Sidewinder server "
                                               f"- version: {self.server.version} "
                                               f"- CPU platform: {platform.machine()} "
+                                              f"- TLS: {'Enabled' if self.server.ssl_context else 'Disabled'}"
                                               f"- connection ID: '{self.websocket_connection.id}'."
                                               )
                                              )
@@ -361,7 +380,8 @@ class SidewinderWorker:
 
             await self.websocket_connection.send(json.dumps(dict(kind="Info",
                                                                  text=(f"Sidewinder Server - version: {self.server.version} - "
-                                                                       f"CPU platform: {platform.machine()}"
+                                                                       f"CPU platform: {platform.machine()} - "
+                                                                       f"TLS: {'Enabled' if self.server.ssl_context else 'Disabled'}"
                                                                        )
                                                                  )
                                                             )
@@ -452,12 +472,42 @@ class SidewinderWorker:
 
 @click.command()
 @click.option(
+    "--version/--no-version",
+    type=bool,
+    default=False,
+    show_default=False,
+    required=True,
+    help="Prints the Sidewinder Server version and exits."
+)
+@click.option(
     "--port",
     type=int,
-    default=8765,
+    default=SERVER_PORT,
     show_default=True,
     required=True,
     help="Run the websocket server on this port."
+)
+@click.option(
+    "--tls",
+    nargs=2,
+    default=os.getenv("TLS").split(" ") if os.getenv("TLS") else None,
+    required=False,
+    metavar=('CERTFILE', 'KEYFILE'),
+    help="Enable transport-level security (TLS/SSL).  Provide a Certificate file path, and a Key file path - separated by a space.  Example: tls/server.crt tls/server.key"
+)
+@click.option(
+    "--user-list-filename",
+    type=str,
+    default=None,
+    required=False,
+    help="The user dictionary file (in JSON) to use for security."
+)
+@click.option(
+    "--secret-key",
+    type=str,
+    default=SECRET_KEY,
+    required=True,
+    help="The secret key used to salt the user password hashes.  The same key value MUST have been used when creating the user-list-file!"
 )
 @click.option(
     "--shard-data-path",
@@ -516,7 +566,9 @@ class SidewinderWorker:
     help="Maximum Websocket message size"
 )
 @coro
-async def main(port: int,
+async def main(version: bool,
+               port: int,
+               tls: list,
                database_file: str,
                shard_data_path: str,
                duckdb_threads: int,
@@ -525,7 +577,19 @@ async def main(port: int,
                websocket_ping_timeout: int,
                max_websocket_message_size: int
                ):
+    if version:
+        print(f"Sidewinder Server - version: {sidewinder_version}")
+        return
+
+    tls_certfile = None
+    tls_keyfile = None
+    if tls:
+        tls_certfile = Path(tls[0])
+        tls_keyfile = Path(tls[1])
+
     await SidewinderServer(port=port,
+                           tls_certfile=tls_certfile,
+                           tls_keyfile=tls_keyfile,
                            shard_data_path=shard_data_path,
                            database_file=database_file,
                            duckdb_threads=duckdb_threads,

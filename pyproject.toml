@@ -40,6 +40,7 @@ dependencies = [
     "pglast==3.*",
     "psutil==5.9.*",
     "pyarrow==12.0.0",
+    "pyOpenSSL==23.1.*",
     "python-dateutil==2.8.*",
     "pytz==2023.*",
     "PyYAML==6.*",
@@ -64,6 +65,9 @@ sidewinder-server = "sidewinder.server:main"
 sidewinder-worker = "sidewinder.worker:main"
 sidewinder-client = "sidewinder.client:main"
 sidewinder-bootstrap = "sidewinder.setup.bootstrap:main"
+sidewinder-create-tls-keypair = "sidewinder.setup.tls_utilities:create_tls_keypair"
+sidewinder-create-user = "sidewinder.security:create_user"
+sidewinder-authenticate-user = "sidewinder.security:authenticate_user"
 
 [tool.bumpver]
 current_version = "0.0.18"

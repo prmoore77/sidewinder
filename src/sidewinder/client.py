@@ -1,23 +1,23 @@
 from __future__ import annotations
 
-import argparse
 import asyncio
 import os
+import re
 import signal
+import ssl
 import sys
 import threading
 from typing import Any, Set
-import re
 
+import click
+import pandas as pd
 from websockets.exceptions import ConnectionClosed
 from websockets.frames import Close
 from websockets.legacy.client import connect
-from websockets.version import version as websockets_version
 
-from .utils import get_dataframe_from_bytes
-
-import pandas as pd
 from . import __version__ as sidewinder_version
+from .constants import SERVER_PORT
+from .utils import get_dataframe_from_bytes
 
 # Misc. Constants
 SIDEWINDER_CLIENT_VERSION = sidewinder_version
@@ -110,23 +110,41 @@ def print_over_input(string: str) -> None:
 
 
 async def run_client(
-    uri: str,
+    server_hostname: str,
+    server_port: int,
+    tls: bool,
+    tls_roots: str,
     loop: asyncio.AbstractEventLoop,
     inputs: asyncio.Queue[str],
     stop: asyncio.Future[None],
 ) -> None:
-    print(f"Starting Sidewinder Client - version: {SIDEWINDER_CLIENT_VERSION} - connecting to server: {uri}")
+    print(f"Starting Sidewinder Client - version: {SIDEWINDER_CLIENT_VERSION}")
+
+    scheme = "ws"
+    ssl_context = None
+    if tls:
+        scheme = "wss"
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        if tls_roots:
+            ssl_context.load_verify_locations(cafile=tls_roots)
+
+    print(f"TLS/SSL is {'Enabled' if ssl_context else 'Disabled'}")
+
+    server_uri = f"{scheme}://{server_hostname}:{server_port}/client"
+    print(f"Connecting to Server URI: {server_uri}")
+
     try:
-        websocket = await connect(uri,
+        websocket = await connect(uri=server_uri,
                                   extra_headers=dict(),
-                                  max_size=1024 ** 3
+                                  max_size=1024 ** 3,
+                                  ssl=ssl_context
                                   )
     except Exception as exc:
-        print_over_input(f"Failed to connect to {uri}: {exc}.")
+        print_over_input(f"Failed to connect to {server_uri}: {exc}.")
         exit_from_event_loop_thread(loop, stop)
         return
     else:
-        print_during_input(f"Connected to {uri}.")
+        print_during_input(f"Connected to {server_uri}.")
 
     try:
         while True:
@@ -173,24 +191,55 @@ async def run_client(
         exit_from_event_loop_thread(loop, stop)
 
 
-def main() -> None:
-    # Parse command line arguments.
-    parser = argparse.ArgumentParser(
-        prog="python -m client",
-        description="Interactive WebSocket client.",
-        add_help=False,
-    )
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--version", action="store_true")
-    group.add_argument("uri", metavar="<uri>", nargs="?", default=os.getenv("SERVER_URL", "ws://localhost:8765/client"))
-    args = parser.parse_args()
-
-    if args.version:
-        print(f"client {websockets_version}")
+@click.command()
+@click.option(
+    "--version/--no-version",
+    type=bool,
+    default=False,
+    show_default=False,
+    required=True,
+    help="Prints the Sidewinder Client version and exits."
+)
+@click.option(
+    "--server-hostname",
+    type=str,
+    default="localhost",
+    show_default=True,
+    required=True,
+    help="The hostname of the Sidewinder server."
+)
+@click.option(
+    "--server-port",
+    type=int,
+    default=SERVER_PORT,
+    show_default=True,
+    required=True,
+    help="The port of the Sidewinder server."
+)
+@click.option(
+    "--tls/--no-tls",
+    type=bool,
+    default=False,
+    show_default=True,
+    required=True,
+    help="Connect to the server with tls"
+)
+@click.option(
+    "--tls-roots",
+    type=str,
+    default=None,
+    show_default=True,
+    help="'Path to trusted TLS certificate(s)"
+)
+def main(version: bool,
+         server_hostname: str,
+         server_port: int,
+         tls: bool,
+         tls_roots: str
+         ) -> None:
+    if version:
+        print(f"Sidewinder Client - version: {sidewinder_version}")
         return
-
-    if args.uri is None:
-        parser.error("the following arguments are required: <uri>")
 
     # If we're on Windows, enable VT100 terminal support.
     if sys.platform == "win32":
@@ -224,7 +273,7 @@ def main() -> None:
     stop: asyncio.Future[None] = loop.create_future()
 
     # Schedule the task that will manage the connection.
-    loop.create_task(run_client(args.uri, loop, inputs, stop))
+    loop.create_task(run_client(server_hostname, server_port, tls, tls_roots, loop, inputs, stop, ))
 
     # Start the event loop in a background thread.
     thread = threading.Thread(target=loop.run_forever)
