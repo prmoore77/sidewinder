@@ -14,7 +14,7 @@ include = ["*"]  # package names should match these glob patterns (["*"] by defa
 
 [project]
 name = "sidewinder-db"
-version = "0.0.21"
+version = "0.0.22"
 description = "A Python-based Distributed Database"
 readme = "README.md"
 authors = [{ name = "Philip Moore", email = "prmoore77@hotmail.com" }]
@@ -70,7 +70,7 @@ sidewinder-create-user = "sidewinder.security:click_create_user"
 sidewinder-authenticate-user = "sidewinder.security:click_authenticate_user"
 
 [tool.bumpver]
-current_version = "0.0.21"
+current_version = "0.0.22"
 version_pattern = "MAJOR.MINOR.PATCH[PYTAGNUM]"
 commit_message = "bump version {old_version} -> {new_version}"
 commit = true
