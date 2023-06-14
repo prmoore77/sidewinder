@@ -21,21 +21,21 @@ SEPARATOR = ("=" * 80)
 @click.option(
     "--tls-cert-file",
     type=str,
-    default=DEFAULT_CERT_FILE.as_posix(),
+    default=DEFAULT_CERT_FILE,
     required=True,
     help="The TLS certificate file to create."
 )
 @click.option(
     "--tls-key-file",
     type=str,
-    default=DEFAULT_KEY_FILE.as_posix(),
+    default=DEFAULT_KEY_FILE,
     required=True,
     help="The TLS key file to create."
 )
 @click.option(
     "--user-list-filename",
     type=str,
-    default=USER_LIST_FILENAME.as_posix(),
+    default=USER_LIST_FILENAME,
     show_default=True,
     required=True,
     help="The user dictionary file (in JSON) to store the created user data in.  This file should be used to start Sidewinder server afterward."
