@@ -3,8 +3,10 @@ import socket
 from pathlib import Path
 import click
 
-
-TLS_DIR = Path("tls").resolve()
+# Constants
+TLS_DIR = Path("tls")
+DEFAULT_CERT_FILE = (TLS_DIR / "server.crt").as_posix()
+DEFAULT_KEY_FILE = (TLS_DIR / "server.key").as_posix()
 
 
 def _gen_openssl():
@@ -45,32 +47,9 @@ def gen_self_signed_cert():
     return _gen_openssl()
 
 
-@click.command()
-@click.option(
-    "--cert-file",
-    type=str,
-    default=(TLS_DIR / "server.crt").as_posix(),
-    required=True,
-    help="The TLS certificate file to create."
-)
-@click.option(
-    "--key-file",
-    type=str,
-    default=(TLS_DIR / "server.key").as_posix(),
-    required=True,
-    help="The TLS key file to create."
-)
-@click.option(
-    "--overwrite/--no-overwrite",
-    type=bool,
-    default=False,
-    show_default=True,
-    required=True,
-    help="Can we overwrite the cert/key if they exist?"
-)
-def create_tls_keypair(cert_file: str,
-                       key_file: str,
-                       overwrite: bool
+def create_tls_keypair(cert_file: str = DEFAULT_CERT_FILE,
+                       key_file: str = DEFAULT_KEY_FILE,
+                       overwrite: bool = False
                        ):
     cert_file_path = Path(cert_file)
     key_file_path = Path(key_file)
@@ -93,6 +72,33 @@ def create_tls_keypair(cert_file: str,
     print("Created TLS Key pair successfully.")
     print(f"Cert file path: {cert_file_path.as_posix()}")
     print(f"Key file path: {key_file_path.as_posix()}")
+
+
+@click.command()
+@click.option(
+    "--cert-file",
+    type=str,
+    default=DEFAULT_CERT_FILE,
+    required=True,
+    help="The TLS certificate file to create."
+)
+@click.option(
+    "--key-file",
+    type=str,
+    default=DEFAULT_KEY_FILE,
+    required=True,
+    help="The TLS key file to create."
+)
+@click.option(
+    "--overwrite/--no-overwrite",
+    type=bool,
+    default=False,
+    show_default=True,
+    required=True,
+    help="Can we overwrite the cert/key if they exist?"
+)
+def main():
+    create_tls_keypair(**locals())
 
 
 if __name__ == '__main__':

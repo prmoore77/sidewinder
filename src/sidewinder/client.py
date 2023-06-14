@@ -112,21 +112,19 @@ def print_over_input(string: str) -> None:
 async def run_client(
     server_hostname: str,
     server_port: int,
-    tls: bool,
     tls_roots: str,
+    username: str,
+    password: str,
     loop: asyncio.AbstractEventLoop,
     inputs: asyncio.Queue[str],
     stop: asyncio.Future[None],
 ) -> None:
     print(f"Starting Sidewinder Client - version: {SIDEWINDER_CLIENT_VERSION}")
 
-    scheme = "ws"
-    ssl_context = None
-    if tls:
-        scheme = "wss"
-        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        if tls_roots:
-            ssl_context.load_verify_locations(cafile=tls_roots)
+    scheme = "wss"
+    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    if tls_roots:
+        ssl_context.load_verify_locations(cafile=tls_roots)
 
     print(f"TLS/SSL is {'Enabled' if ssl_context else 'Disabled'}")
 
@@ -144,7 +142,12 @@ async def run_client(
         exit_from_event_loop_thread(loop, stop)
         return
     else:
-        print_during_input(f"Connected to {server_uri}.")
+        # Authenticate
+        token = f"{username}:{password}"
+        await websocket.send(message=token)
+
+        print_during_input(f"Successfully connected to {server_uri} - as user: '{username}'.")
+
 
     try:
         while True:
@@ -217,25 +220,30 @@ async def run_client(
     help="The port of the Sidewinder server."
 )
 @click.option(
-    "--tls/--no-tls",
-    type=bool,
-    default=False,
-    show_default=True,
-    required=True,
-    help="Connect to the server with tls"
-)
-@click.option(
     "--tls-roots",
     type=str,
     default=None,
     show_default=True,
     help="'Path to trusted TLS certificate(s)"
 )
+@click.option(
+    "--username",
+    type=str,
+    required=True,
+    help="The client username to authenticate with."
+)
+@click.option(
+    "--password",
+    type=str,
+    required=True,
+    help="The client password associated with the username above"
+)
 def main(version: bool,
          server_hostname: str,
          server_port: int,
-         tls: bool,
-         tls_roots: str
+         tls_roots: str,
+         username: str,
+         password: str
          ) -> None:
     if version:
         print(f"Sidewinder Client - version: {sidewinder_version}")
@@ -273,7 +281,7 @@ def main(version: bool,
     stop: asyncio.Future[None] = loop.create_future()
 
     # Schedule the task that will manage the connection.
-    loop.create_task(run_client(server_hostname, server_port, tls, tls_roots, loop, inputs, stop, ))
+    loop.create_task(run_client(server_hostname, server_port, tls_roots, username, password, loop, inputs, stop, ))
 
     # Start the event loop in a background thread.
     thread = threading.Thread(target=loop.run_forever)

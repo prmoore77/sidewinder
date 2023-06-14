@@ -17,7 +17,7 @@ It consists of a server, workers, and a client (where you can run interactive SQ
 
 Sidewinder will NOT distribute queries which do not contain aggregates - it will run those on the server side. 
 
-Sidewinder uses [Apache Arrow](https://arrow.apache.org) with [Websockets](https://websockets.readthedocs.io/en/stable/) for communication between the server, worker(s), and client(s).  
+Sidewinder uses [Apache Arrow](https://arrow.apache.org) with [Websockets](https://websockets.readthedocs.io/en/stable/) with TLS for secure communication between the server, worker(s), and client(s).  
 
 It uses [DuckDB](https://duckdb.org) as its SQL execution engine - and the PostgreSQL parser to understand how to combine results from distributed workers.
 
@@ -53,10 +53,11 @@ pip install .
 pip install sidewinder-db
 ```
 
-## Bootstrap the environment by creating a sample TPC-H dataset with 11 shards
+## Bootstrap the environment by creating a security user list (password file), TLS certificate keypair, and a sample TPC-H dataset with 11 shards
+### (The passwords shown are just examples, it is recommended that you use more secure passwords)
 ```shell
 . ./venv/bin/activate
-sidewinder-bootstrap --tpch-scale-factor=1 --shard-count=11
+sidewinder-bootstrap --client-username=scott --client-password=tiger --worker-password=united --tpch-scale-factor=1 --shard-count=11
 ```
 
 ## Run sidewinder locally - from root of repo (use --help option on the executables below for option details)
@@ -68,17 +69,17 @@ sidewinder-server
 ```
 
 ### 2) Worker:
-#### Open another terminal, then start a single worker with command:
+#### Open another terminal, then start a single worker (using the same worker password you used in the bootstrap command above) with command:
 ```bash
 . ./venv/bin/activate
-sidewinder-worker
+sidewinder-worker --password=united
 ```
 ##### Note: you can run up to 11 workers for this example configuration, to do that do this instead of starting a single-worker:
 ```bash
 . ./venv/bin/activate
 for x in {1..11}:
 do
-  sidewinder-worker &
+  sidewinder-worker --password=united &
 done
 ```
 
@@ -88,10 +89,10 @@ kill $(jobs -p)
 ```
 
 ### 3) Client:
-#### Open another terminal, then:
+#### Open another terminal, then connect with the client - using the same client username/password you used in the bootstrap command above:
 ```
 . ./venv/bin/activate
-sidewinder-client
+sidewinder-client --username=scott --password=tiger
 ```
 
 ##### Then - while in the client - you can run a sample query that will distribute to the worker(s) (if you have at least one running) - example:
@@ -112,10 +113,10 @@ sidewinder-client
 ```.set summarize = false;```
 
 ### Optional DuckDB CLI (use for data QA purposes, etc.)
-Install DuckDB CLI version [0.8.0](https://github.com/duckdb/duckdb/releases/tag/v0.8.0) - and make sure the executable is on your PATH.
+Install DuckDB CLI version [0.8.1](https://github.com/duckdb/duckdb/releases/tag/v0.8.1) - and make sure the executable is on your PATH.
 
 Platform Downloads:   
-[Linux x86-64](https://github.com/duckdb/duckdb/releases/download/v0.8.0/duckdb_cli-linux-amd64.zip)   
-[Linux arm64 (aarch64)](https://github.com/duckdb/duckdb/releases/download/v0.8.0/duckdb_cli-linux-aarch64.zip)   
-[MacOS Universal](https://github.com/duckdb/duckdb/releases/download/v0.8.0/duckdb_cli-osx-universal.zip)   
+[Linux x86-64](https://github.com/duckdb/duckdb/releases/download/v0.8.1/duckdb_cli-linux-amd64.zip)   
+[Linux arm64 (aarch64)](https://github.com/duckdb/duckdb/releases/download/v0.8.1/duckdb_cli-linux-aarch64.zip)   
+[MacOS Universal](https://github.com/duckdb/duckdb/releases/download/v0.8.1/duckdb_cli-osx-universal.zip)   
 

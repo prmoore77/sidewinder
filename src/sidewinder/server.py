@@ -21,11 +21,11 @@ from munch import Munch
 from . import __version__ as sidewinder_version
 from .config import logger
 from .constants import SHARD_CONFIRMATION, STARTED, DISTRIBUTED, FAILED, COMPLETED, WORKER_SUCCESS, WORKER_FAILED, DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, \
-    SHARD_DATASET, RESULT, SERVER_PORT
+    SHARD_DATASET, RESULT, SERVER_PORT, USER_LIST_FILENAME
 from .parser.query import Query
 from .utils import combine_bytes_results, get_s3_files, get_shard_files, coro, get_cpu_count, get_memory_limit, run_query, pyarrow
-from .security import SECRET_KEY
-
+from .security import TOKEN_DELIMITER, SECRET_KEY, authenticate_user
+from .setup.tls_utilities import DEFAULT_CERT_FILE, DEFAULT_KEY_FILE
 
 # Misc. Constants
 SIDEWINDER_SERVER_VERSION = sidewinder_version
@@ -59,6 +59,8 @@ class SidewinderServer:
                  port: int,
                  tls_certfile: Path,
                  tls_keyfile: Path,
+                 user_list_filename: Path,
+                 secret_key: str,
                  shard_data_path: str,
                  database_file: str,
                  duckdb_threads: int,
@@ -70,6 +72,8 @@ class SidewinderServer:
         self.port = port
         self.tls_certfile = tls_certfile
         self.tls_keyfile = tls_keyfile
+        self.user_list_filename = user_list_filename
+        self.secret_key = secret_key
         self.shard_data_path = shard_data_path
         self.database_file = database_file
         self.duckdb_threads = duckdb_threads
@@ -102,8 +106,10 @@ class SidewinderServer:
         logger.info(
             msg=(f"Starting Sidewinder Server - version: {self.version} - (\n"
                  f" port: {self.port},\n"
-                 f" tls_certfile: {self.tls_certfile.resolve() if self.tls_certfile else 'None'},\n"
-                 f" tls_keyfile: {self.tls_keyfile.resolve() if self.tls_keyfile else 'None'},\n"
+                 f" tls_certfile: {self.tls_certfile.as_posix() if self.tls_certfile else 'None'},\n"
+                 f" tls_keyfile: {self.tls_keyfile.as_posix() if self.tls_keyfile else 'None'},\n"
+                 f" user_list_filename: {self.user_list_filename.as_posix()},\n"
+                 f" secret_key: (redacted),\n"
                  f" shard_data_path: '{self.shard_data_path}',\n"
                  f" database_file: '{self.database_file}',\n"
                  f" duckdb_threads: {self.duckdb_threads},\n"
@@ -139,6 +145,23 @@ class SidewinderServer:
         shard.confirmed = False
         return shard
 
+    async def get_user(self, token: str):
+        try:
+            username, password = token.split(":")
+            # Verify the password
+            auth_result = authenticate_user(user_list_filename=self.user_list_filename.as_posix(),
+                                            username=username,
+                                            password=password,
+                                            secret_key=self.secret_key
+                                            )
+            if auth_result:
+                return username
+            else:
+                return None
+        except Exception as e:
+            logger.exception(msg=str(e))
+            return None
+
     async def connection_handler(self, websocket):
         if websocket.path == "/client":
             await self.client_handler(client_websocket=websocket)
@@ -149,6 +172,15 @@ class SidewinderServer:
             return
 
     async def client_handler(self, client_websocket):
+        token = await client_websocket.recv()
+        user = await self.get_user(token)
+        if user is None:
+            logger.warning(msg=f"Client authentication failed for websocket: '{client_websocket.id}'")
+            await client_websocket.close(code=1011, reason="client authentication failed")
+            return
+        else:
+            logger.info(msg=f"Client User: '{user}' successfully authenticated for websocket: '{client_websocket.id}'")
+
         client = SidewinderSQLClient(server=self,
                                      websocket_connection=client_websocket
                                      )
@@ -156,6 +188,15 @@ class SidewinderServer:
         await client.connect()
 
     async def worker_handler(self, worker_websocket):
+        token = await worker_websocket.recv()
+        user = await self.get_user(token)
+        if user is None:
+            logger.warning(msg=f"Worker authentication failed for websocket: '{worker_websocket.id}'")
+            await worker_websocket.close(code=1011, reason="worker authentication failed")
+            return
+        else:
+            logger.info(msg=f"Worker user: '{user}' successfully authenticated for websocket: '{worker_websocket.id}'")
+
         # Get a shard that hasn't been passed out yet...
         shard = await self.get_next_shard()
         worker = SidewinderWorker(server=self,
@@ -490,7 +531,7 @@ class SidewinderWorker:
 @click.option(
     "--tls",
     nargs=2,
-    default=os.getenv("TLS").split(" ") if os.getenv("TLS") else None,
+    default=os.getenv("TLS").split(" ") if os.getenv("TLS") else [DEFAULT_CERT_FILE, DEFAULT_KEY_FILE],
     required=False,
     metavar=('CERTFILE', 'KEYFILE'),
     help="Enable transport-level security (TLS/SSL).  Provide a Certificate file path, and a Key file path - separated by a space.  Example: tls/server.crt tls/server.key"
@@ -498,24 +539,18 @@ class SidewinderWorker:
 @click.option(
     "--user-list-filename",
     type=str,
-    default=None,
-    required=False,
-    help="The user dictionary file (in JSON) to use for security."
+    default=USER_LIST_FILENAME,
+    show_default=True,
+    required=True,
+    help="The user dictionary file (in JSON) to use for security - for password-based authentication."
 )
 @click.option(
     "--secret-key",
     type=str,
     default=SECRET_KEY,
+    show_default=False,
     required=True,
     help="The secret key used to salt the user password hashes.  The same key value MUST have been used when creating the user-list-file!"
-)
-@click.option(
-    "--shard-data-path",
-    type=str,
-    default=os.getenv("SHARD_DATA_PATH", "data/shards/tpch/1"),
-    show_default=True,
-    required=True,
-    help="The worker source parquet data file path to use (for shards)."
 )
 @click.option(
     "--database-file",
@@ -524,6 +559,14 @@ class SidewinderWorker:
     show_default=True,
     required=True,
     help="The source parquet data file path to use."
+)
+@click.option(
+    "--shard-data-path",
+    type=str,
+    default=os.getenv("SHARD_DATA_PATH", "data/shards/tpch/1"),
+    show_default=True,
+    required=True,
+    help="The worker source parquet data file path to use (for shards)."
 )
 @click.option(
     "--duckdb-threads",
@@ -569,6 +612,8 @@ class SidewinderWorker:
 async def main(version: bool,
                port: int,
                tls: list,
+               user_list_filename: str,
+               secret_key: str,
                database_file: str,
                shard_data_path: str,
                duckdb_threads: int,
@@ -590,6 +635,8 @@ async def main(version: bool,
     await SidewinderServer(port=port,
                            tls_certfile=tls_certfile,
                            tls_keyfile=tls_keyfile,
+                           user_list_filename=Path(user_list_filename),
+                           secret_key=secret_key,
                            shard_data_path=shard_data_path,
                            database_file=database_file,
                            duckdb_threads=duckdb_threads,

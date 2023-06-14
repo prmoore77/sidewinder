@@ -28,8 +28,9 @@ class Worker:
     def __init__(self,
                  server_hostname: str,
                  server_port: int,
-                 tls: bool,
                  tls_roots: str,
+                 username: str,
+                 password: str,
                  duckdb_threads: int,
                  duckdb_memory_limit: int,
                  websocket_ping_timeout: int,
@@ -37,8 +38,9 @@ class Worker:
                  ):
         self.server_hostname = server_hostname
         self.server_port = server_port
-        self.tls = tls
         self.tls_roots = tls_roots
+        self.username = username
+        self.password = password
         self.duckdb_threads = duckdb_threads
         self.duckdb_memory_limit = duckdb_memory_limit
         self.websocket_ping_timeout = websocket_ping_timeout
@@ -52,13 +54,10 @@ class Worker:
         self.db_connection = None
 
         # Setup TLS/SSL if requested
-        self.server_scheme = "ws"
-        self.ssl_context = None
-        if self.tls:
-            self.server_scheme = "wss"
-            self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-            if tls_roots:
-                self.ssl_context.load_verify_locations(cafile=self.tls_roots)
+        self.server_scheme = "wss"
+        self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        if tls_roots:
+            self.ssl_context.load_verify_locations(cafile=self.tls_roots)
 
         # Build the server URI
         self.server_uri = f"{self.server_scheme}://{self.server_hostname}:{self.server_port}/worker"
@@ -150,7 +149,11 @@ class Worker:
                                           ping_timeout=self.websocket_ping_timeout,
                                           ssl=self.ssl_context
                                           ) as self.websocket:
-                logger.info(msg=f"Successfully connected to server uri: '{self.server_uri}' - connection: '{self.websocket.id}'")
+                # Authenticate
+                token = f"{self.username}:{self.password}"
+                await self.websocket.send(message=token)
+
+                logger.info(msg=f"Successfully connected to server uri: '{self.server_uri}' - as user: '{self.username}' - connection: '{self.websocket.id}'")
                 await self.process_server_messages()
 
     async def process_server_messages(self):
@@ -229,19 +232,25 @@ class Worker:
     help="The port of the Sidewinder server."
 )
 @click.option(
-    "--tls/--no-tls",
-    type=bool,
-    default=False,
-    show_default=True,
-    required=True,
-    help="Connect to the server with tls"
-)
-@click.option(
     "--tls-roots",
     type=str,
     default=None,
     show_default=True,
     help="'Path to trusted TLS certificate(s)"
+)
+@click.option(
+    "--username",
+    type=str,
+    default="worker",
+    show_default=True,
+    required=True,
+    help="The worker username to authenticate with."
+)
+@click.option(
+    "--password",
+    type=str,
+    required=True,
+    help="The worker password associated with the username above"
 )
 @click.option(
     "--duckdb-threads",
@@ -279,8 +288,9 @@ class Worker:
 async def main(version: bool,
                server_hostname: str,
                server_port: int,
-               tls: bool,
                tls_roots: str,
+               username: str,
+               password: str,
                duckdb_threads: int,
                duckdb_memory_limit: int,
                websocket_ping_timeout: int,
@@ -292,8 +302,9 @@ async def main(version: bool,
 
     await Worker(server_hostname=server_hostname,
                  server_port=server_port,
-                 tls=tls,
                  tls_roots=tls_roots,
+                 username=username,
+                 password=password,
                  duckdb_threads=duckdb_threads,
                  duckdb_memory_limit=duckdb_memory_limit,
                  websocket_ping_timeout=websocket_ping_timeout,

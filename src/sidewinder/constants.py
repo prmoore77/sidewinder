@@ -1,3 +1,6 @@
+from pathlib import Path
+
+# Constants
 COMPLETED = "COMPLETED"
 DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE = 1024 ** 3
 DISTRIBUTED = "DISTRIBUTED"
@@ -14,3 +17,9 @@ WORKER_FAILED = "FAILED"
 WORKER_SUCCESS = "SUCCESS"
 
 SERVER_PORT = 8765
+
+# Directories
+SECURITY_DIR = Path("security")
+
+# File paths
+USER_LIST_FILENAME = (SECURITY_DIR / "user_list.json").as_posix()
