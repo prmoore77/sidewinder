@@ -72,14 +72,14 @@ sidewinder-server
 #### Open another terminal, then start a single worker (using the same worker password you used in the bootstrap command above) with command:
 ```bash
 . ./venv/bin/activate
-sidewinder-worker --password=united
+sidewinder-worker --tls-roots=tls/server.crt --password=united
 ```
 ##### Note: you can run up to 11 workers for this example configuration, to do that do this instead of starting a single-worker:
 ```bash
 . ./venv/bin/activate
 for x in {1..11}:
 do
-  sidewinder-worker --password=united &
+  sidewinder-worker --tls-roots=tls/server.crt --password=united &
 done
 ```
 
@@ -92,7 +92,7 @@ kill $(jobs -p)
 #### Open another terminal, then connect with the client - using the same client username/password you used in the bootstrap command above:
 ```
 . ./venv/bin/activate
-sidewinder-client --username=scott --password=tiger
+sidewinder-client --tls-roots=tls/server.crt --username=scott --password=tiger
 ```
 
 ##### Then - while in the client - you can run a sample query that will distribute to the worker(s) (if you have at least one running) - example:
