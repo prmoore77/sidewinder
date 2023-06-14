@@ -63,9 +63,11 @@ def create_tls_keypair(cert_file: str = DEFAULT_CERT_FILE,
 
     cert, key = gen_self_signed_cert()
 
+    cert_file_path.parent.mkdir(parents=True, exist_ok=True)
     with open(file=cert_file_path, mode="wb") as cert_file:
         cert_file.write(cert)
 
+    key_file_path.parent.mkdir(parents=True, exist_ok=True)
     with open(file=key_file_path, mode="wb") as key_file:
         key_file.write(key)
 
