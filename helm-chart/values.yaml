@@ -4,7 +4,8 @@
 
 server:
   config:
-    tpchScale: 10000
+    databaseFile: data/ssb_sf1000.duckdb
+    shardDataPath: s3://voltrondata-sidewinder/shards/ssb/sf=1000
     pingTimeout: 900
 
   replicaCount: 1
