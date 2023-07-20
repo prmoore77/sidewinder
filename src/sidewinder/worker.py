@@ -222,7 +222,7 @@ class Worker:
 @click.option(
     "--server-hostname",
     type=str,
-    default="localhost",
+    default=os.getenv("SERVER_HOSTNAME", "localhost"),
     show_default=True,
     required=True,
     help="The hostname of the Sidewinder server."
@@ -230,7 +230,7 @@ class Worker:
 @click.option(
     "--server-port",
     type=int,
-    default=SERVER_PORT,
+    default=os.getenv("SERVER_PORT", SERVER_PORT),
     show_default=True,
     required=True,
     help="The port of the Sidewinder server."
@@ -238,21 +238,23 @@ class Worker:
 @click.option(
     "--tls-roots",
     type=str,
-    default=None,
+    default=os.getenv("TLS_ROOTS"),
     show_default=True,
     help="'Path to trusted TLS certificate(s)"
 )
 @click.option(
     "--username",
     type=str,
-    default="worker",
-    show_default=True,
+    default=os.getenv("WORKER_USERNAME", "worker"),
+    show_default=False,
     required=True,
     help="The worker username to authenticate with."
 )
 @click.option(
     "--password",
     type=str,
+    default=os.getenv("WORKER_PASSWORD"),
+    show_default=False,
     required=True,
     help="The worker password associated with the username above"
 )

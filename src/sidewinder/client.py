@@ -206,7 +206,7 @@ async def run_client(
 @click.option(
     "--server-hostname",
     type=str,
-    default="localhost",
+    default=os.getenv("SERVER_HOSTNAME", "localhost"),
     show_default=True,
     required=True,
     help="The hostname of the Sidewinder server."
@@ -214,7 +214,7 @@ async def run_client(
 @click.option(
     "--server-port",
     type=int,
-    default=SERVER_PORT,
+    default=os.getenv("SERVER_PORT", SERVER_PORT),
     show_default=True,
     required=True,
     help="The port of the Sidewinder server."
@@ -222,19 +222,23 @@ async def run_client(
 @click.option(
     "--tls-roots",
     type=str,
-    default=None,
+    default=os.getenv("TLS_ROOTS"),
     show_default=True,
     help="'Path to trusted TLS certificate(s)"
 )
 @click.option(
     "--username",
     type=str,
+    default=os.getenv("CLIENT_USERNAME"),
+    show_default=False,
     required=True,
     help="The client username to authenticate with."
 )
 @click.option(
     "--password",
     type=str,
+    default=os.getenv("CLIENT_PASSWORD"),
+    show_default=False,
     required=True,
     help="The client password associated with the username above"
 )

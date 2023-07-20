@@ -523,7 +523,7 @@ class SidewinderWorker:
 @click.option(
     "--port",
     type=int,
-    default=SERVER_PORT,
+    default=os.getenv("SERVER_PORT", SERVER_PORT),
     show_default=True,
     required=True,
     help="Run the websocket server on this port."

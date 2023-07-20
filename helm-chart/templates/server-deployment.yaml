@@ -13,6 +13,7 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/global-secret.yaml") . | sha256sum }}
+        checksum/tls: {{ include (print $.Template.BasePath "/tls-secret.yaml") . | sha256sum }}
         {{- with .Values.server.podAnnotations }}
           {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -23,6 +24,14 @@ spec:
         - name: local-volume
           persistentVolumeClaim:
             claimName: {{ include "sidewinder.fullname" . }}-local-volume-claim
+        - name: security-volume
+          secret:
+            secretName: {{ include "sidewinder.fullname" . }}-secret
+            optional: false
+        - name: tls-volume
+          secret:
+            secretName: {{ include "sidewinder.fullname" . }}-tls-secret
+            optional: false
       {{- with .Values.server.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -37,11 +46,25 @@ spec:
           volumeMounts:
             - name: local-volume
               mountPath: /opt/sidewinder/data
+            - name: security-volume
+              mountPath: /opt/sidewinder/security/user_list.json
+              subPath: user_list.json
+            - name: tls-volume
+              mountPath: /opt/sidewinder/tls
+              readOnly: true
           env:
             - name: DATABASE_FILE
-              value: /opt/sidewinder/data/tpch_{{ .Values.server.config.tpchScale }}.db
+              value: {{ .Values.server.config.databaseFile }}
             - name: SHARD_DATA_PATH
-              value: s3://voltrondata-sidewinder/shards/tpch/{{ .Values.server.config.tpchScale }}
+              value: {{ .Values.server.config.shardDataPath }}
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sidewinder.fullname" . }}-secret
+                  key: SECRET_KEY
+                  optional: false
+            - name: TLS
+              value: "tls/server.crt tls/server.key"
             - name: PING_TIMEOUT
               value: {{ .Values.server.config.pingTimeout | quote }}
           securityContext:

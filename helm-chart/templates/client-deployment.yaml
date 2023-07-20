@@ -24,13 +24,37 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml .Values.client.podSecurityContext | nindent 8 }}
+      volumes:
+        - name: tls-volume
+          secret:
+            secretName: {{ include "sidewinder.fullname" . }}-tls-secret
+            optional: false
       containers:
         - name: {{ .Chart.Name }}
+          volumeMounts:
+            - name: tls-volume
+              mountPath: /opt/sidewinder/tls/server.crt
+              subPath: server.crt
+              readOnly: true
           command: [ "/bin/bash" ]
           args: [ "-c", "sleep infinity" ]
           env:
-            - name: SERVER_URL
-              value: ws://{{ include "sidewinder.fullname" . }}:{{ .Values.server.service.port }}/client
+            - name: SERVER_HOSTNAME
+              value: {{ include "sidewinder.fullname" . }}
+            - name: CLIENT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sidewinder.fullname" . }}-secret
+                  key: CLIENT_USERNAME
+                  optional: false
+            - name: CLIENT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sidewinder.fullname" . }}-secret
+                  key: CLIENT_PASSWORD
+                  optional: false
+            - name: TLS_ROOTS
+              value: tls/server.crt
           securityContext:
             {{- toYaml .Values.client.securityContext | nindent 12 }}
           image: "{{ .Values.client.image.repository }}:{{ .Values.client.image.tag | default .Chart.AppVersion }}"

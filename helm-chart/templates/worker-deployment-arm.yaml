@@ -13,6 +13,7 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/global-secret.yaml") . | sha256sum }}
+        checksum/tls: {{ include (print $.Template.BasePath "/tls-secret.yaml") . | sha256sum }}
         {{- with .Values.worker.podAnnotations }}
           {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -32,6 +33,10 @@ spec:
             path: /nvme/disk
             # this field is optional
             type: Directory
+        - name: tls-volume
+          secret:
+            secretName: {{ include "sidewinder.fullname" . }}-tls-secret
+            optional: false
       initContainers:
         - name: volume-mount-hack
           image: busybox
@@ -42,14 +47,32 @@ spec:
       containers:
         - name: {{ .Chart.Name }}
           volumeMounts:
-            - mountPath: /tmp
-              name: nvme-volume
+            - name: nvme-volume
+              mountPath: /tmp
+            - name: tls-volume
+              mountPath: /opt/sidewinder/tls/server.crt
+              subPath: server.crt
+              readOnly: true
           command: [ "/bin/bash" ]
           # args: [ "-c", "sleep infinity" ]
-          args: [ "-c", "python -m worker" ]
+          args: [ "-c", "sidewinder-worker" ]
           env:
-            - name: SERVER_URL
-              value: ws://{{ include "sidewinder.fullname" . }}:{{ .Values.server.service.port }}/worker
+            - name: SERVER_HOSTNAME
+              value: {{ include "sidewinder.fullname" . }}
+            - name: WORKER_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sidewinder.fullname" . }}-secret
+                  key: WORKER_USERNAME
+                  optional: false
+            - name: WORKER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sidewinder.fullname" . }}-secret
+                  key: WORKER_PASSWORD
+                  optional: false
+            - name: TLS_ROOTS
+              value: tls/server.crt
           securityContext:
             {{- toYaml .Values.worker.securityContext | nindent 12 }}
           image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag | default .Chart.AppVersion }}"
