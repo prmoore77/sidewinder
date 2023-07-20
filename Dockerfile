@@ -31,7 +31,7 @@ RUN case ${TARGETPLATFORM} in \
     rm -f awscliv2.zip
 
 # Install DuckDB CLI
-ARG DUCKDB_VERSION="0.7.1"
+ARG DUCKDB_VERSION="0.8.1"
 
 RUN case ${TARGETPLATFORM} in \
          "linux/amd64")  DUCKDB_FILE=https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip  ;; \
