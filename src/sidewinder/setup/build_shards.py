@@ -202,7 +202,7 @@ def build_shards(shard_definition_file: str,
 @click.option(
     "--source-data-path",
     type=str,
-    default=os.getenv("SOURCE_DATA_PATH", (DATA_DIR / "tpch" / "1").as_posix()),
+    default=os.getenv("SOURCE_DATA_PATH", (DATA_DIR / "tpch" / "sf=1").as_posix()),
     show_default=True,
     required=True,
     help="The source parquet data path"
@@ -210,7 +210,7 @@ def build_shards(shard_definition_file: str,
 @click.option(
     "--output-data-path",
     type=str,
-    default=os.getenv("OUTPUT_DATA_PATH", (DATA_DIR / "shards" / "tpch" / "1").as_posix()),
+    default=os.getenv("OUTPUT_DATA_PATH", (DATA_DIR / "shards" / "tpch" / "sf=1").as_posix()),
     show_default=True,
     required=True,
     help="The target database output path"

@@ -50,7 +50,8 @@ dependencies = [
     "sqlparse==0.4.*",
     "urllib3==1.26.*",
     "websockets==11.0.*",
-    "zstandard==0.21.*"
+    "zstandard==0.21.*",
+    "python-dotenv==1.0.*"
 ]
 requires-python = ">=3.8"
 
@@ -68,6 +69,8 @@ sidewinder-bootstrap = "sidewinder.setup.bootstrap:sidewinder_bootstrap"
 sidewinder-create-tls-keypair = "sidewinder.setup.tls_utilities:create_tls_keypair"
 sidewinder-create-user = "sidewinder.security:click_create_user"
 sidewinder-authenticate-user = "sidewinder.security:click_authenticate_user"
+sidewinder-create-duckdb-database-from-parquet = "sidewinder.setup.create_duckdb_database_from_parquet:main"
+sidewinder-build-shards = "sidewinder.setup.build_shards:main"
 
 [tool.bumpver]
 current_version = "0.0.23"

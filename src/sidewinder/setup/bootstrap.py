@@ -150,7 +150,8 @@ def sidewinder_bootstrap(tls_cert_file: str,
                                               )
 
     logger.info(msg=SEPARATOR)
-    create_duckdb_database_from_parquet(tpch_scale_factor=tpch_scale_factor,
+    create_duckdb_database_from_parquet(benchmark_name="tpch",
+                                        scale_factor=tpch_scale_factor,
                                         data_directory=data_directory,
                                         overwrite=overwrite)
 
@@ -159,7 +160,7 @@ def sidewinder_bootstrap(tls_cert_file: str,
     build_shards(shard_definition_file=(SCRIPT_DIR / "config" / "tpch_shard_generation_queries.yaml").as_posix(),
                  shard_count=shard_count,
                  source_data_path=parquet_path.as_posix(),
-                 output_data_path=(Path(data_directory) / "shards" / "tpch" / printable_tpch_scale_factor).as_posix(),
+                 output_data_path=(Path(data_directory) / "shards" / "tpch" / f"sf={printable_tpch_scale_factor}").as_posix(),
                  overwrite=overwrite
                  )
 

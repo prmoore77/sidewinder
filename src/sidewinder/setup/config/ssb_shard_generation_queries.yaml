@@ -1,0 +1,37 @@
+tables:
+  - name: date_dim
+    parent_table_name: ''
+    query_template: |-
+      SELECT *
+        FROM read_parquet('{data_path}/date/date.*.parquet')
+  - name: customer
+    parent_table_name: ''
+    query_template: |-
+      SELECT CAST ({shard_id} AS INTEGER) AS shard_id
+           , customer.* 
+        FROM read_parquet('{data_path}/customer/customer.*.parquet') AS customer
+       WHERE mod (abs (hash (c_custkey)), {overall_shard_count}) + 1 = {shard_id}
+  - name: lineorder
+    parent_table_name: customer
+    query_template: |-
+      SELECT lineorder.* 
+        FROM read_parquet('{data_path}/lineorder/lineorder.*.parquet') AS lineorder
+       WHERE lo_custkey IN (SELECT DISTINCT c_custkey
+                              FROM {parent_table_dataset}
+                           )
+  - name: part
+    parent_table_name: lineorder
+    query_template: |-
+      SELECT * 
+        FROM read_parquet('{data_path}/part/part.*.parquet') 
+       WHERE p_partkey IN (SELECT DISTINCT lo_partkey 
+                             FROM {parent_table_dataset}
+                          )
+  - name: supplier
+    parent_table_name: lineorder
+    query_template: |-
+      SELECT *
+        FROM read_parquet('{data_path}/supplier/supplier.*.parquet')
+       WHERE s_suppkey IN (SELECT DISTINCT lo_suppkey
+                             FROM {parent_table_dataset}
+                          )

@@ -135,7 +135,7 @@ async def get_s3_files(shard_data_path):
 
         for file in files:
             file_name = file['Key']
-            if file_path in file_name and re.search(pattern=r"\.tar\.std$", string=file_name):
+            if file_path in file_name and re.search(pattern=r"\.tar\.zst$", string=file_name):
                 s3_files.append(f"s3://{bucket_name}/{file_name}")
 
     return s3_files

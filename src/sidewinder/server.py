@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from uuid import UUID
+from dotenv import load_dotenv
 
 import click
 import duckdb
@@ -162,6 +163,19 @@ class SidewinderServer:
             logger.exception(msg=str(e))
             return None
 
+    async def authenticate_socket(self,
+                                  websocket_connection):
+        token = await websocket_connection.recv()
+        user = await self.get_user(token)
+        if user is None:
+            logger.warning(msg=f"Authentication failed for websocket: '{websocket_connection.id}'")
+            await websocket_connection.send("Authentication failed")
+            await websocket_connection.close(code=1011, reason="Authentication failed")
+            return
+        else:
+            logger.info(msg=f"User: '{user}' successfully authenticated for websocket: '{websocket_connection.id}'")
+            await websocket_connection.send(f"User: '{user}' successfully authenticated to server.")
+
     async def connection_handler(self, websocket):
         if websocket.path == "/client":
             await self.client_handler(client_websocket=websocket)
@@ -172,14 +186,7 @@ class SidewinderServer:
             return
 
     async def client_handler(self, client_websocket):
-        token = await client_websocket.recv()
-        user = await self.get_user(token)
-        if user is None:
-            logger.warning(msg=f"Client authentication failed for websocket: '{client_websocket.id}'")
-            await client_websocket.close(code=1011, reason="client authentication failed")
-            return
-        else:
-            logger.info(msg=f"Client User: '{user}' successfully authenticated for websocket: '{client_websocket.id}'")
+        await self.authenticate_socket(websocket_connection=client_websocket)
 
         client = SidewinderSQLClient(server=self,
                                      websocket_connection=client_websocket
@@ -188,14 +195,7 @@ class SidewinderServer:
         await client.connect()
 
     async def worker_handler(self, worker_websocket):
-        token = await worker_websocket.recv()
-        user = await self.get_user(token)
-        if user is None:
-            logger.warning(msg=f"Worker authentication failed for websocket: '{worker_websocket.id}'")
-            await worker_websocket.close(code=1011, reason="worker authentication failed")
-            return
-        else:
-            logger.info(msg=f"Worker user: '{user}' successfully authenticated for websocket: '{worker_websocket.id}'")
+        await self.authenticate_socket(websocket_connection=worker_websocket)
 
         # Get a shard that hasn't been passed out yet...
         shard = await self.get_next_shard()
@@ -555,7 +555,7 @@ class SidewinderWorker:
 @click.option(
     "--database-file",
     type=str,
-    default=os.getenv("DATABASE_FILE", "data/tpch_1.duckdb"),
+    default=os.getenv("DATABASE_FILE", "data/tpch_sf1.duckdb"),
     show_default=True,
     required=True,
     help="The source parquet data file path to use."
@@ -563,7 +563,7 @@ class SidewinderWorker:
 @click.option(
     "--shard-data-path",
     type=str,
-    default=os.getenv("SHARD_DATA_PATH", "data/shards/tpch/1"),
+    default=os.getenv("SHARD_DATA_PATH", "data/shards/tpch/sf=1"),
     show_default=True,
     required=True,
     help="The worker source parquet data file path to use (for shards)."
@@ -648,4 +648,7 @@ async def main(version: bool,
 
 
 if __name__ == "__main__":
+    # Load our environment file if it is present
+    load_dotenv(dotenv_path=".env")
+
     main()

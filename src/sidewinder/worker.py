@@ -167,14 +167,18 @@ class Worker:
                     self.db_connection = await self.get_shard_database(message=message)
             elif isinstance(raw_message, str):
                 logger.info(msg=f"Message from server: {raw_message}")
-                message = munchify(x=json.loads(raw_message))
 
-                if message.kind == INFO:
-                    logger.info(msg=f"Informational message from server: '{message.text}'")
-                elif message.kind == QUERY:
-                    await self.run_query(query_message=message)
-                elif message.kind == ERROR:
-                    logger.error(msg=f"Server sent an error: {message.error_message}")
+                try:
+                    message = munchify(x=json.loads(raw_message))
+                except json.decoder.JSONDecodeError:
+                    pass
+                else:
+                    if message.kind == INFO:
+                        logger.info(msg=f"Informational message from server: '{message.text}'")
+                    elif message.kind == QUERY:
+                        await self.run_query(query_message=message)
+                    elif message.kind == ERROR:
+                        logger.error(msg=f"Server sent an error: {message.error_message}")
 
     async def run_query(self, query_message: Munch):
         if not self.ready:

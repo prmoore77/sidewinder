@@ -5,24 +5,14 @@ from pathlib import Path
 from .data_creation_utils import execute_query, DATA_DIR, get_printable_number, pushd
 
 
-# Constants
-TPCH_TABLE_NAME_LIST = ["lineitem",
-                        "customer",
-                        "nation",
-                        "orders",
-                        "part",
-                        "partsupp",
-                        "region",
-                        "supplier"
-                        ]
-
-
-def create_duckdb_database_from_parquet(tpch_scale_factor: int,
+def create_duckdb_database_from_parquet(benchmark_name: str,
+                                        scale_factor: int,
                                         data_directory: str,
                                         overwrite: bool
                                         ):
-    logger.info(msg=("Creating a TPC-H DuckDB with parameters: "
-                     f"--tpch-scale-factor={tpch_scale_factor} "
+    logger.info(msg=(f"Creating a DuckDB with parameters: "
+                     f"--benchmark-name={benchmark_name} "
+                     f"--scale-factor={scale_factor} "
                      f"--data-directory={data_directory} "
                      f"--overwrite={overwrite}"
                      )
@@ -31,8 +21,8 @@ def create_duckdb_database_from_parquet(tpch_scale_factor: int,
     # Output the database version
     logger.info(msg=f"Using DuckDB Version: {duckdb.__version__}")
 
-    print_scale_factor = get_printable_number(tpch_scale_factor)
-    database_file = Path(data_directory) / f"tpch_{print_scale_factor}.duckdb"
+    print_scale_factor = get_printable_number(scale_factor)
+    database_file = Path(data_directory) / f"{benchmark_name}_sf{print_scale_factor}.duckdb"
 
     # Delete the file if it exists...
     if database_file.exists():
@@ -49,27 +39,39 @@ def create_duckdb_database_from_parquet(tpch_scale_factor: int,
 
     data_path = Path(data_directory)
     working_dir = data_path.parent
-    parquet_file_path = data_path / "tpch" / print_scale_factor
+    parquet_file_path = data_path / benchmark_name / f"sf={print_scale_factor}"
 
     with pushd(working_dir):
-        for table_name in TPCH_TABLE_NAME_LIST:
-            table_parquet_path = parquet_file_path / table_name
-            sql_statement = (f"CREATE OR REPLACE VIEW {table_name} AS "
-                             f"SELECT * FROM read_parquet('{table_parquet_path.relative_to(working_dir)}/*.parquet');"
-                             )
-            execute_query(conn=conn, query=sql_statement)
+        for path_object in parquet_file_path.glob(pattern="*"):
+            if path_object.is_dir():
+                table_name = path_object.name
+                table_parquet_path = parquet_file_path / table_name
+                if table_name == "date":
+                    table_name = "date_dim"
+                sql_statement = (f"CREATE OR REPLACE VIEW {table_name} AS "
+                                 f"SELECT * FROM read_parquet('{table_parquet_path.relative_to(working_dir)}/*.parquet');"
+                                 )
+                execute_query(conn=conn, query=sql_statement)
 
     logger.info(msg="All done.")
 
 
 @click.command()
 @click.option(
-    "--tpch-scale-factor",
+    "--benchmark-name",
+    type=str,
+    default="tpch",
+    show_default=True,
+    required=True,
+    help="The benchmark name (used to determine the path and tables)."
+)
+@click.option(
+    "--scale-factor",
     type=float,
     default=1,
     show_default=True,
     required=True,
-    help="The TPC-H scale factor to generate."
+    help="The benchmark scale factor to generate."
 )
 @click.option(
     "--data-directory",
@@ -90,7 +92,8 @@ def create_duckdb_database_from_parquet(tpch_scale_factor: int,
     required=True,
     help="Can we overwrite the target database file if it already exists..."
 )
-def main(tpch_scale_factor: int,
+def main(benchmark_name: str,
+         scale_factor: int,
          data_directory: str,
          overwrite: bool):
     create_duckdb_database_from_parquet(**locals())

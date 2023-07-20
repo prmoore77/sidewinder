@@ -31,7 +31,7 @@ def generate_tpch_parquet_data(tpch_scale_factor: int,
     execute_query(conn=conn, query=f"CALL dbgen(sf={tpch_scale_factor})")
 
     # Export the data
-    target_directory = Path(f"{data_directory}/tpch/{get_printable_number(tpch_scale_factor)}")
+    target_directory = Path(f"{data_directory}/tpch/sf={get_printable_number(tpch_scale_factor)}")
 
     if target_directory.exists():
         if overwrite:
