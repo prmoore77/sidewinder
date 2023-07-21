@@ -63,8 +63,16 @@ ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 # Upgrade pip, setuptools, and wheel
 RUN pip install --upgrade setuptools pip wheel
 
-# Install the Sidewinder PyPi package
-RUN pip install sidewinder-db
+# Install the Sidewinder package (from source)
+RUN pwd
+COPY --chown=app_user:app_user pyproject.toml README.md LICENSE .
+COPY --chown=app_user:app_user src ./src
+RUN ls -ltr ./src
+
+RUN pip install .
+
+# Cleanup source code
+RUN rm -rf pyproject.toml README.md LICENSE ./src
 
 # Open web-socket port
 EXPOSE 8765
