@@ -53,8 +53,8 @@ spec:
                   name: {{ include "sidewinder.fullname" . }}-secret
                   key: CLIENT_PASSWORD
                   optional: false
-            - name: TLS_ROOTS
-              value: tls/server.crt
+            - name: TLS_VERIFY
+              value: {{ .Values.client.config.tlsVerify | quote | default "TRUE" }}
           securityContext:
             {{- toYaml .Values.client.securityContext | nindent 12 }}
           image: "{{ .Values.client.image.repository }}:{{ .Values.client.image.tag | default .Chart.AppVersion }}"

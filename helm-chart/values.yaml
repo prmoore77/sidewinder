@@ -57,6 +57,9 @@ server:
   affinity: {}
 
 worker:
+  config:
+    tlsVerify: False
+
   image:
     repository: prmoorevoltron/sidewinder
     pullPolicy: Always
@@ -86,11 +89,11 @@ worker:
 
   resources:
     limits:
-      cpu: 1
-      memory: 4Gi
+      cpu: 4
+      memory: 16Gi
     requests:
-      cpu: 1
-      memory: 4Gi
+      cpu: 4
+      memory: 16Gi
 
   nodeSelector:
     alpha.eksctl.io/nodegroup-name: graviton-cpu-node-group
@@ -104,6 +107,9 @@ worker:
   affinity: {}
 
 client:
+  config:
+    tlsVerify: False
+
   replicaCount: 1
 
   image:
