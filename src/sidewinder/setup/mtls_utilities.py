@@ -1,5 +1,12 @@
-import OpenSSL
 import os
+import cryptography
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.hashes import SHA256
+from cryptography.x509.oid import NameOID
+from datetime import datetime, timedelta
 from pathlib import Path
 import click
 
@@ -39,11 +46,19 @@ TLS_DIR = Path("tls").resolve()
     required=True,
     help="Can we overwrite the CA cert/key if they exist?"
 )
-def create_ca_keypair(ca_common_name: str,
-                      ca_cert_file: str,
-                      ca_key_file: str,
-                      overwrite: bool
-                      ):
+@click.option(
+    "--password",
+    type=str,
+    required=False,
+    help="An optional password to encrypt the CA certificate keypair"
+)
+def create_ca_keypair(
+        ca_common_name: str,
+        ca_cert_file: str,
+        ca_key_file: str,
+        overwrite: bool,
+        password: str
+):
     ca_cert_file_path = Path(ca_cert_file)
     ca_key_file_path = Path(ca_key_file)
 
@@ -55,29 +70,49 @@ def create_ca_keypair(ca_common_name: str,
             ca_key_file_path.unlink(missing_ok=True)
 
     # Generate a new key pair for the CA
-    key = OpenSSL.crypto.PKey()
-    key.generate_key(OpenSSL.crypto.TYPE_RSA, 2048)
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+        backend=default_backend()
+    )
 
-    # Generate a self-signed CA certificate
-    ca_cert = OpenSSL.crypto.X509()
-    ca_cert.get_subject().CN = ca_common_name
-    ca_cert.set_version(CERTIFICATE_VERSION)
-    ca_cert.set_serial_number(1000)
-    ca_cert.gmtime_adj_notBefore(0)
-    ca_cert.gmtime_adj_notAfter(365*24*60*60) # 1 year validity
-    ca_cert.set_issuer(ca_cert.get_subject())
-    ca_cert.set_pubkey(key)
-    ca_cert.add_extensions([
-        OpenSSL.crypto.X509Extension(b"basicConstraints", True, b"CA:TRUE"),
-        OpenSSL.crypto.X509Extension(b"subjectKeyIdentifier", False, b"hash", subject=ca_cert),
+    # Create a self-signed CA certificate
+    subject = issuer = x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, ca_common_name)
     ])
-    ca_cert.sign(key, "sha256")
+
+    ca_cert = x509.CertificateBuilder().subject_name(
+        name=subject
+    ).issuer_name(
+        name=issuer
+    ).public_key(
+        key=private_key.public_key()
+    ).serial_number(
+        number=x509.random_serial_number()
+    ).not_valid_before(
+        time=datetime.utcnow()
+    ).not_valid_after(
+        time=datetime.utcnow() + timedelta(days=365)
+    ).add_extension(
+        extval=x509.BasicConstraints(ca=True, path_length=None), critical=True
+    ).sign(
+        private_key=private_key, algorithm=SHA256(), backend=default_backend()
+    )
 
     # Write the CA certificate and key to disk
-    with open(Path(ca_cert_file_path), "wb") as f:
-        f.write(OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, ca_cert))
-    with open(Path(ca_key_file_path), "wb") as f:
-        f.write(OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, key))
+    with open(ca_cert_file_path, "wb") as f:
+        f.write(ca_cert.public_bytes(encoding=serialization.Encoding.PEM))
+
+    if password:
+        encryption_algorithm = serialization.BestAvailableEncryption(password.encode())
+    else:
+        encryption_algorithm = serialization.NoEncryption()
+    with open(ca_key_file_path, "wb") as f:
+        f.write(private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=encryption_algorithm
+        ))
 
     print(f"Successfully created Certificate Authority (CA) keypair for Common Name (CN): '{ca_common_name}'")
     print(f"CA Cert file: {ca_cert_file_path.as_posix()}")
@@ -128,13 +163,28 @@ def create_ca_keypair(ca_common_name: str,
     required=True,
     help="Can we overwrite the client cert/key if they exist?"
 )
-def create_client_keypair(client_common_name: str,
-                          ca_cert_file: str,
-                          ca_key_file: str,
-                          client_cert_file: str,
-                          client_key_file: str,
-                          overwrite: bool
-                          ):
+@click.option(
+    "--ca-password",
+    type=str,
+    required=False,
+    help="The CA private key password (if it is encrypted)"
+)
+@click.option(
+    "--password",
+    type=str,
+    required=False,
+    help="An optional password to encrypt the certificate keypair"
+)
+def create_client_keypair(
+        client_common_name: str,
+        ca_cert_file: str,
+        ca_key_file: str,
+        client_cert_file: str,
+        client_key_file: str,
+        overwrite: bool,
+        ca_password: str,
+        password: str
+):
     ca_cert_file_path = Path(ca_cert_file)
     ca_key_file_path = Path(ca_key_file)
 
@@ -155,43 +205,65 @@ def create_client_keypair(client_common_name: str,
             client_key_file_path.unlink(missing_ok=True)
 
     # Generate a new key pair for the client
-    key = OpenSSL.crypto.PKey()
-    key.generate_key(OpenSSL.crypto.TYPE_RSA, 2048)
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+        backend=default_backend()
+    )
 
     # Generate a certificate signing request (CSR) for the client
-    req = OpenSSL.crypto.X509Req()
-    req.get_subject().CN = client_common_name
-    req.set_pubkey(key)
-    req.sign(key, "sha256")
+    subject = issuer = x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, client_common_name)
+    ])
+
+    csr = x509.CertificateSigningRequestBuilder().subject_name(
+        name=subject
+    ).sign(
+        private_key=private_key, algorithm=SHA256(), backend=default_backend()
+    )
 
     # Load the CA certificate and key from disk
     with open(ca_cert_file_path, "rb") as f:
-        ca_cert = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, f.read())
+        ca_cert = x509.load_pem_x509_certificate(f.read(), default_backend())
+
     with open(ca_key_file_path, "rb") as f:
-        ca_key = OpenSSL.crypto.load_privatekey(OpenSSL.crypto.FILETYPE_PEM, f.read())
+        ca_key = serialization.load_pem_private_key(f.read(), password=ca_password.encode() if ca_password else None, backend=default_backend())
 
     # Create a new certificate for the client, signed by the CA
-    client_cert = OpenSSL.crypto.X509()
-    client_cert.set_version(CERTIFICATE_VERSION)
-    client_cert.set_subject(req.get_subject())
-    client_cert.set_serial_number(2000)
-    client_cert.gmtime_adj_notBefore(0)
-    client_cert.gmtime_adj_notAfter(365*24*60*60) # 1 year validity
-    client_cert.set_issuer(ca_cert.get_subject())
-    client_cert.set_pubkey(req.get_pubkey())
-    client_cert.add_extensions([
-        OpenSSL.crypto.X509Extension(b"basicConstraints", True, b"CA:FALSE"),
-        OpenSSL.crypto.X509Extension(b"subjectKeyIdentifier", False, b"hash", subject=client_cert),
-    ])
-    client_cert.sign(ca_key, "sha256")
+    client_cert = x509.CertificateBuilder().subject_name(
+        name=csr.subject
+    ).issuer_name(
+        name=ca_cert.subject
+    ).public_key(
+        key=csr.public_key()
+    ).serial_number(
+        number=x509.random_serial_number()
+    ).not_valid_before(
+        time=datetime.utcnow()
+    ).not_valid_after(
+        time=datetime.utcnow() + timedelta(days=365)
+    ).add_extension(
+        extval=x509.BasicConstraints(ca=False, path_length=None), critical=True
+    ).sign(
+        private_key=ca_key, algorithm=SHA256(), backend=default_backend()
+    )
 
     # Write the client certificate and key to disk
     with open(client_cert_file_path, "wb") as f:
-        f.write(OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, client_cert))
+        f.write(client_cert.public_bytes(encoding=serialization.Encoding.PEM))
     with open(client_key_file_path, "wb") as f:
-        f.write(OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, key))
+        if password:
+            encryption_algorithm = serialization.BestAvailableEncryption(password.encode())
+        else:
+            encryption_algorithm = serialization.NoEncryption()
+
+        f.write(private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=encryption_algorithm
+        ))
 
     print(f"Successfully created Client certificate keypair for Common Name (CN): '{client_common_name}'")
-    print(f"Signed Client Certificate keypair with CA: '{ca_cert.get_subject()}'''s private key")
+    print(f"Signed Client Certificate keypair with CA: '{ca_cert.subject}'s private key")
     print(f"Client Cert file: {client_cert_file_path.as_posix()}")
     print(f"Client Key file: {client_key_file_path.as_posix()}")

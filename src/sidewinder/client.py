@@ -115,6 +115,7 @@ async def run_client(
     tls_verify: bool,
     tls_roots: str,
     mtls: list,
+    mtls_password: str,
     username: str,
     password: str,
     loop: asyncio.AbstractEventLoop,
@@ -129,7 +130,7 @@ async def run_client(
         ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
         mtls_cert_chain = mtls[0]
         mtls_private_key = mtls[1]
-        ssl_context.load_cert_chain(certfile=mtls_cert_chain, keyfile=mtls_private_key)
+        ssl_context.load_cert_chain(certfile=mtls_cert_chain, keyfile=mtls_private_key, password=mtls_password)
     else:
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 
@@ -258,6 +259,12 @@ async def run_client(
     help="Enable transport-level security"
 )
 @click.option(
+    "--mtls-password",
+    type=str,
+    required=False,
+    help="The password for an encrypted client certificate private key (if needed)"
+)
+@click.option(
     "--username",
     type=str,
     default=os.getenv("CLIENT_USERNAME"),
@@ -279,6 +286,7 @@ def main(version: bool,
          tls_verify: bool,
          tls_roots: str,
          mtls: list,
+         mtls_password: str,
          username: str,
          password: str
          ) -> None:
@@ -318,7 +326,7 @@ def main(version: bool,
     stop: asyncio.Future[None] = loop.create_future()
 
     # Schedule the task that will manage the connection.
-    loop.create_task(run_client(server_hostname, server_port, tls_verify, tls_roots, mtls, username, password, loop, inputs, stop, ))
+    loop.create_task(run_client(server_hostname, server_port, tls_verify, tls_roots, mtls, mtls_password, username, password, loop, inputs, stop, ))
 
     # Start the event loop in a background thread.
     thread = threading.Thread(target=loop.run_forever)

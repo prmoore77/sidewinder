@@ -31,6 +31,7 @@ class Worker:
                  tls_verify: bool,
                  tls_roots: str,
                  mtls: list,
+                 mtls_password: str,
                  username: str,
                  password: str,
                  duckdb_threads: int,
@@ -62,7 +63,7 @@ class Worker:
             self.ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
             mtls_cert_chain = mtls[0]
             mtls_private_key = mtls[1]
-            self.ssl_context.load_cert_chain(certfile=mtls_cert_chain, keyfile=mtls_private_key)
+            self.ssl_context.load_cert_chain(certfile=mtls_cert_chain, keyfile=mtls_private_key, password=mtls_password)
         else:
             self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 
@@ -276,6 +277,12 @@ class Worker:
     help="Enable transport-level security"
 )
 @click.option(
+    "--mtls-password",
+    type=str,
+    required=False,
+    help="The password for an encrypted client certificate private key (if needed)"
+)
+@click.option(
     "--username",
     type=str,
     default=os.getenv("WORKER_USERNAME", "worker"),
@@ -330,6 +337,7 @@ async def main(version: bool,
                tls_verify: bool,
                tls_roots: str,
                mtls: list,
+               mtls_password: str,
                username: str,
                password: str,
                duckdb_threads: int,
@@ -346,6 +354,7 @@ async def main(version: bool,
                  tls_verify=tls_verify,
                  tls_roots=tls_roots,
                  mtls=mtls,
+                 mtls_password=mtls_password,
                  username=username,
                  password=password,
                  duckdb_threads=duckdb_threads,
