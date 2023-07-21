@@ -60,6 +60,7 @@ class SidewinderServer:
                  port: int,
                  tls_certfile: Path,
                  tls_keyfile: Path,
+                 mtls_ca_file: Path,
                  user_list_filename: Path,
                  secret_key: str,
                  shard_data_path: str,
@@ -73,6 +74,7 @@ class SidewinderServer:
         self.port = port
         self.tls_certfile = tls_certfile
         self.tls_keyfile = tls_keyfile
+        self.mtls_ca_file = mtls_ca_file
         self.user_list_filename = user_list_filename
         self.secret_key = secret_key
         self.shard_data_path = shard_data_path
@@ -89,11 +91,17 @@ class SidewinderServer:
         self.queries = Munch()
         self.version = SIDEWINDER_SERVER_VERSION
 
-        # Setup TLS/SSL if requested
+        # Setup TLS/SSL
         self.ssl_context = None
         if self.tls_certfile and self.tls_keyfile:
             self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             self.ssl_context.load_cert_chain(certfile=self.tls_certfile, keyfile=self.tls_keyfile)
+
+        if self.mtls_ca_file:
+            logger.info(msg=f"MTLS is enabled - CA file: {mtls_ca_file}")
+            # Enable server-side certificate verification
+            self.ssl_context.verify_mode = ssl.CERT_REQUIRED
+            self.ssl_context.load_verify_locations(cafile=self.mtls_ca_file)
 
         # Asynch stuff
         self.event_loop = asyncio.get_event_loop()
@@ -109,6 +117,7 @@ class SidewinderServer:
                  f" port: {self.port},\n"
                  f" tls_certfile: {self.tls_certfile.as_posix() if self.tls_certfile else 'None'},\n"
                  f" tls_keyfile: {self.tls_keyfile.as_posix() if self.tls_keyfile else 'None'},\n"
+                 f" mtls_ca_file: {self.mtls_ca_file.as_posix() if self.mtls_ca_file else 'None'},\n"
                  f" user_list_filename: {self.user_list_filename.as_posix()},\n"
                  f" secret_key: (redacted),\n"
                  f" shard_data_path: '{self.shard_data_path}',\n"
@@ -537,6 +546,21 @@ class SidewinderWorker:
     help="Enable transport-level security (TLS/SSL).  Provide a Certificate file path, and a Key file path - separated by a space.  Example: tls/server.crt tls/server.key"
 )
 @click.option(
+    "--verify-client/--no-verify-client",
+    type=bool,
+    default=(os.getenv("VERIFY_CLIENT", "False").upper() == "TRUE"),
+    show_default=True,
+    required=True,
+    help="enable mutual TLS and verify the client if True"
+)
+@click.option(
+    "--mtls",
+    type=str,
+    default=os.getenv("MTLS"),
+    required=False,
+    help="If you provide verify-client, you must supply an MTLS CA Certificate file (public key only)"
+)
+@click.option(
     "--user-list-filename",
     type=str,
     default=USER_LIST_FILENAME,
@@ -612,6 +636,8 @@ class SidewinderWorker:
 async def main(version: bool,
                port: int,
                tls: list,
+               verify_client: bool,
+               mtls: str,
                user_list_filename: str,
                secret_key: str,
                database_file: str,
@@ -632,9 +658,15 @@ async def main(version: bool,
         tls_certfile = Path(tls[0])
         tls_keyfile = Path(tls[1])
 
+    mtls_ca_file = None
+    if verify_client:
+        if mtls:
+            mtls_ca_file = Path(mtls)
+
     await SidewinderServer(port=port,
                            tls_certfile=tls_certfile,
                            tls_keyfile=tls_keyfile,
+                           mtls_ca_file=mtls_ca_file,
                            user_list_filename=Path(user_list_filename),
                            secret_key=secret_key,
                            shard_data_path=shard_data_path,

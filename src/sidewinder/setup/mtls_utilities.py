@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 import click
 
+# Constants
+CERTIFICATE_VERSION: int = (3 - 1)
 
 TLS_DIR = Path("tls").resolve()
 
@@ -59,6 +61,7 @@ def create_ca_keypair(ca_common_name: str,
     # Generate a self-signed CA certificate
     ca_cert = OpenSSL.crypto.X509()
     ca_cert.get_subject().CN = ca_common_name
+    ca_cert.set_version(CERTIFICATE_VERSION)
     ca_cert.set_serial_number(1000)
     ca_cert.gmtime_adj_notBefore(0)
     ca_cert.gmtime_adj_notAfter(365*24*60*60) # 1 year validity
@@ -149,7 +152,7 @@ def create_client_keypair(client_common_name: str,
             raise RuntimeError(f"The Client Cert file(s): '{client_cert_file_path.as_posix()}' or '{client_key_file_path.as_posix()}' - exist - and overwrite is False, aborting.")
         else:
             client_cert_file_path.unlink(missing_ok=True)
-            client_cert_file_path.unlink(missing_ok=True)
+            client_key_file_path.unlink(missing_ok=True)
 
     # Generate a new key pair for the client
     key = OpenSSL.crypto.PKey()
@@ -169,6 +172,7 @@ def create_client_keypair(client_common_name: str,
 
     # Create a new certificate for the client, signed by the CA
     client_cert = OpenSSL.crypto.X509()
+    client_cert.set_version(CERTIFICATE_VERSION)
     client_cert.set_subject(req.get_subject())
     client_cert.set_serial_number(2000)
     client_cert.gmtime_adj_notBefore(0)

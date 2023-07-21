@@ -28,7 +28,9 @@ class Worker:
     def __init__(self,
                  server_hostname: str,
                  server_port: int,
+                 tls_verify: bool,
                  tls_roots: str,
+                 mtls: list,
                  username: str,
                  password: str,
                  duckdb_threads: int,
@@ -55,9 +57,26 @@ class Worker:
 
         # Setup TLS/SSL if requested
         self.server_scheme = "wss"
-        self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        if tls_roots:
-            self.ssl_context.load_verify_locations(cafile=self.tls_roots)
+
+        if mtls:
+            self.ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+            mtls_cert_chain = mtls[0]
+            mtls_private_key = mtls[1]
+            self.ssl_context.load_cert_chain(certfile=mtls_cert_chain, keyfile=mtls_private_key)
+        else:
+            self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+        self.ssl_context.load_default_certs()
+
+        if tls_verify:
+            self.ssl_context.check_hostname = True
+            self.ssl_context.verify_mode = ssl.CERT_REQUIRED
+            if tls_roots:
+                self.ssl_context.load_verify_locations(cafile=self.tls_roots)
+        else:
+            logger.warning(msg="TLS Verification is disabled.")
+            self.ssl_context.check_hostname = False
+            self.ssl_context.verify_mode = ssl.CERT_NONE
 
         # Build the server URI
         self.server_uri = f"{self.server_scheme}://{self.server_hostname}:{self.server_port}/worker"
@@ -236,11 +255,25 @@ class Worker:
     help="The port of the Sidewinder server."
 )
 @click.option(
+    "--tls-verify/--no-tls-verify",
+    type=bool,
+    default=(os.getenv("TLS_VERIFY", "TRUE").upper() == "TRUE"),
+    show_default=True,
+    help="Verify the server's TLS certificate hostname and signature.  Using --no-tls-verify is insecure, only use for development purposes!"
+)
+@click.option(
     "--tls-roots",
     type=str,
     default=os.getenv("TLS_ROOTS"),
     show_default=True,
-    help="'Path to trusted TLS certificate(s)"
+    help="Path to trusted TLS certificate(s) - does not apply if '--no-tls-verify' is specified"
+)
+@click.option(
+    "--mtls",
+    nargs=2,
+    default=None,
+    metavar=('CERTFILE', 'KEYFILE'),
+    help="Enable transport-level security"
 )
 @click.option(
     "--username",
@@ -294,7 +327,9 @@ class Worker:
 async def main(version: bool,
                server_hostname: str,
                server_port: int,
+               tls_verify: bool,
                tls_roots: str,
+               mtls: list,
                username: str,
                password: str,
                duckdb_threads: int,
@@ -308,7 +343,9 @@ async def main(version: bool,
 
     await Worker(server_hostname=server_hostname,
                  server_port=server_port,
+                 tls_verify=tls_verify,
                  tls_roots=tls_roots,
+                 mtls=mtls,
                  username=username,
                  password=password,
                  duckdb_threads=duckdb_threads,

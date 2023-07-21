@@ -112,7 +112,9 @@ def print_over_input(string: str) -> None:
 async def run_client(
     server_hostname: str,
     server_port: int,
+    tls_verify: bool,
     tls_roots: str,
+    mtls: list,
     username: str,
     password: str,
     loop: asyncio.AbstractEventLoop,
@@ -122,11 +124,26 @@ async def run_client(
     print(f"Starting Sidewinder Client - version: {SIDEWINDER_CLIENT_VERSION}")
 
     scheme = "wss"
-    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    if tls_roots:
-        ssl_context.load_verify_locations(cafile=tls_roots)
 
-    print(f"TLS/SSL is {'Enabled' if ssl_context else 'Disabled'}")
+    if mtls:
+        ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        mtls_cert_chain = mtls[0]
+        mtls_private_key = mtls[1]
+        ssl_context.load_cert_chain(certfile=mtls_cert_chain, keyfile=mtls_private_key)
+    else:
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+    ssl_context.load_default_certs()
+
+    if tls_verify:
+        ssl_context.check_hostname = True
+        ssl_context.verify_mode = ssl.CERT_REQUIRED
+        if tls_roots:
+            ssl_context.load_verify_locations(cafile=tls_roots)
+    else:
+        print("WARNING: TLS Verification is disabled.")
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
 
     server_uri = f"{scheme}://{server_hostname}:{server_port}/client"
     print(f"Connecting to Server URI: {server_uri}")
@@ -220,11 +237,25 @@ async def run_client(
     help="The port of the Sidewinder server."
 )
 @click.option(
+    "--tls-verify/--no-tls-verify",
+    type=bool,
+    default=(os.getenv("TLS_VERIFY", "TRUE").upper() == "TRUE"),
+    show_default=True,
+    help="Verify the server's TLS certificate hostname and signature.  Using --no-tls-verify is insecure, only use for development purposes!"
+)
+@click.option(
     "--tls-roots",
     type=str,
     default=os.getenv("TLS_ROOTS"),
     show_default=True,
     help="'Path to trusted TLS certificate(s)"
+)
+@click.option(
+    "--mtls",
+    nargs=2,
+    default=None,
+    metavar=('CERTFILE', 'KEYFILE'),
+    help="Enable transport-level security"
 )
 @click.option(
     "--username",
@@ -245,7 +276,9 @@ async def run_client(
 def main(version: bool,
          server_hostname: str,
          server_port: int,
+         tls_verify: bool,
          tls_roots: str,
+         mtls: list,
          username: str,
          password: str
          ) -> None:
@@ -285,7 +318,7 @@ def main(version: bool,
     stop: asyncio.Future[None] = loop.create_future()
 
     # Schedule the task that will manage the connection.
-    loop.create_task(run_client(server_hostname, server_port, tls_roots, username, password, loop, inputs, stop, ))
+    loop.create_task(run_client(server_hostname, server_port, tls_verify, tls_roots, mtls, username, password, loop, inputs, stop, ))
 
     # Start the event loop in a background thread.
     thread = threading.Thread(target=loop.run_forever)
