@@ -42,7 +42,7 @@ class Query(object):
             group_by_clause = ""
             for target in self.select_stmt.targetList:
                 if not target_is_aggregate(target):
-                    column_name = target.ResTarget.val.ColumnRef.fields[0].String.str
+                    column_name = target.ResTarget.val.ColumnRef.fields[-1].String.str
                     group_by_clause += f", {column_name}"
                     select_column_sql += f", {column_name}"
                 else:
@@ -62,7 +62,7 @@ class Query(object):
                     else:
                         column_name = (f'"{target.ResTarget.val.FuncCall.funcname[0].String.str}('
                                        f'{"DISTINCT " if getattr(target.ResTarget.val.FuncCall, "agg_distinct", False) else ""}'
-                                       f'{target.ResTarget.val.FuncCall.args[0].ColumnRef.fields[0].String.str})"'
+                                       f'{target.ResTarget.val.FuncCall.args[0].ColumnRef.fields[-1].String.str})"'
                                        )
 
                     aggregate_clause = f", {summary_aggregate_function} ({column_name}) AS {column_name}"
@@ -82,7 +82,7 @@ class Query(object):
                 comma = ""
                 for sort_column in sort_columns:
                     if hasattr(sort_column.SortBy.node, "ColumnRef"):
-                        column_name = sort_column.SortBy.node.ColumnRef.fields[0].String.str
+                        column_name = sort_column.SortBy.node.ColumnRef.fields[-1].String.str
                     elif hasattr(sort_column.SortBy.node, "A_Const"):
                         column_name = sort_column.SortBy.node.A_Const.val.Integer.ival
                     sort_direction = "ASC" if sort_column.SortBy.sortby_dir == "SORTBY_DEFAULT" else "DESC"
