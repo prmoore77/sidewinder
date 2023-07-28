@@ -92,7 +92,7 @@ spec:
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}
       nodeSelector:
-        alpha.eksctl.io/nodegroup-name: graviton-cpu-node-group
+        alpha.eksctl.io/nodegroup-name: graviton-3-cpu-node-group
       {{- with .Values.worker.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
