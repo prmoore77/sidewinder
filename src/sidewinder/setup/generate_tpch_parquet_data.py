@@ -23,8 +23,7 @@ def generate_tpch_parquet_data(tpch_scale_factor: int,
     # Get an in-memory DuckDB database connection
     conn = duckdb.connect()
 
-    # Install the TPCH extension needed to generate the data...
-    conn.install_extension(extension="tpch")
+    # Load the TPCH extension needed to generate the data...
     conn.load_extension(extension="tpch")
 
     # Generate the data

@@ -364,8 +364,6 @@ def main(version: bool,
                 if re.search(r"(;|^/)\s*$", line):
                     break
             message = '\n'.join(lines)
-
-            print(f"Calling loop.call_soon_threadsafe with message: '{message}'")
             loop.call_soon_threadsafe(inputs.put_nowait, message)
     except (KeyboardInterrupt, EOFError):  # ^C, ^D
         # Sleep for a second in case the EOF was called in a bash script
