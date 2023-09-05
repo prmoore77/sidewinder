@@ -74,5 +74,10 @@ RUN pip install .
 # Cleanup source code
 RUN rm -rf pyproject.toml README.md ./src
 
+# Run an integration test to ensure everything works
+COPY --chown=app_user:app_user scripts ./scripts
+RUN ./scripts/run_integration_tests.sh && \
+    rm -rf ./scripts
+
 # Open web-socket port
 EXPOSE 8765
