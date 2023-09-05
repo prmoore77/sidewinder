@@ -7,7 +7,7 @@ on:
       - published
 
 env:
-  DOCKER_IMAGE_NAME: prmoorevoltron/sidewinder:latest
+  DOCKER_IMAGE_NAME: prmoorevoltron/sidewinder
 
 jobs:
   docker:
