@@ -7,10 +7,13 @@ import signal
 import ssl
 import sys
 import threading
+from threading import Semaphore
+from time import sleep
 from typing import Any, Set
 
 import click
 import pandas as pd
+from pglast import parser
 from websockets.exceptions import ConnectionClosed
 from websockets.frames import Close
 from websockets.legacy.client import connect
@@ -26,9 +29,10 @@ pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 0)
 pd.set_option('display.max_colwidth', None)
-#pd.set_option('display.colheader_justify', 'center')
+# pd.set_option('display.colheader_justify', 'center')
 pd.set_option('display.precision', 99)
 
+global_semaphore = Semaphore(1)
 
 if sys.platform == "win32":
 
@@ -63,8 +67,8 @@ if sys.platform == "win32":
 
 
 def exit_from_event_loop_thread(
-    loop: asyncio.AbstractEventLoop,
-    stop: asyncio.Future[None],
+        loop: asyncio.AbstractEventLoop,
+        stop: asyncio.Future[None],
 ) -> None:
     loop.stop()
     if not stop.done():
@@ -109,18 +113,27 @@ def print_over_input(string: str) -> None:
     sys.stdout.flush()
 
 
+async def is_sql_command(message: str) -> bool:
+    try:
+        tree = parser.parse_sql_json(message)
+    except Exception as exc:
+        return False
+    else:
+        return True
+
+
 async def run_client(
-    server_hostname: str,
-    server_port: int,
-    tls_verify: bool,
-    tls_roots: str,
-    mtls: list,
-    mtls_password: str,
-    username: str,
-    password: str,
-    loop: asyncio.AbstractEventLoop,
-    inputs: asyncio.Queue[str],
-    stop: asyncio.Future[None],
+        server_hostname: str,
+        server_port: int,
+        tls_verify: bool,
+        tls_roots: str,
+        mtls: list,
+        mtls_password: str,
+        username: str,
+        password: str,
+        loop: asyncio.AbstractEventLoop,
+        inputs: asyncio.Queue[str],
+        stop: asyncio.Future[None],
 ) -> None:
     print(f"Starting Sidewinder Client - version: {SIDEWINDER_CLIENT_VERSION}")
 
@@ -166,7 +179,6 @@ async def run_client(
 
         print_during_input(f"Successfully connected to {server_uri} - as user: '{username}'.")
 
-
     try:
         while True:
             incoming: asyncio.Future[Any] = asyncio.create_task(websocket.recv())
@@ -194,9 +206,14 @@ async def run_client(
                     else:
                         df = get_dataframe_from_bytes(bytes_value=message)
                         print_during_input(f"Results:\n{df.to_pandas()}")
+                        # Release the semaphore since the result was returned
+                        global_semaphore.release()
 
             if outgoing in done:
                 message = outgoing.result()
+                # Acquire a semaphore if the command is SQL to prevent exiting before a result is returned by the server
+                if await is_sql_command(message):
+                    global_semaphore.acquire()
                 await websocket.send(message)
 
             if stop in done:
@@ -348,8 +365,14 @@ def main(version: bool,
                     break
             message = '\n'.join(lines)
 
+            print(f"Calling loop.call_soon_threadsafe with message: '{message}'")
             loop.call_soon_threadsafe(inputs.put_nowait, message)
     except (KeyboardInterrupt, EOFError):  # ^C, ^D
+        # Sleep for a second in case the EOF was called in a bash script
+        sleep(1)
+
+        # Acquire the semaphore in order to prevent exiting before server results are returned
+        global_semaphore.acquire()
         loop.call_soon_threadsafe(stop.set_result, None)
 
     # Wait for the event loop to terminate.
