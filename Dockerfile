@@ -1,4 +1,4 @@
-FROM python:3.11.4
+FROM python:3.11.5
 
 ARG TARGETPLATFORM
 ARG TARGETARCH
@@ -72,7 +72,7 @@ RUN ls -ltr ./src
 RUN pip install .
 
 # Cleanup source code
-RUN rm -rf pyproject.toml README.md LICENSE ./src
+RUN rm -rf pyproject.toml README.md ./src
 
 # Open web-socket port
 EXPOSE 8765

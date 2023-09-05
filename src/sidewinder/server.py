@@ -501,7 +501,11 @@ class SidewinderWorker:
                         f"on the server - with error: '{query.error_message}'")
                     query.response_sent_to_client = True
                 else:
-                    await query.send_results_to_client(result_bytes=result_bytes)
+                    try:
+                        await query.send_results_to_client(result_bytes=result_bytes)
+                    except Exception as e:
+                        # Gracefully handle client disconnects (before results can be sent) to prevent server/worker errors
+                        logger.exception(msg=f"Failed to send results to client: '{query.client.sql_client_id}' - Exception: {str(e)}")
 
     async def process_message(self):
         try:
