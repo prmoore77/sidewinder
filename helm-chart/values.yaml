@@ -40,13 +40,13 @@ server:
   resources:
     limits:
       cpu: 60
-      memory: 235Gi
+      memory: 470Gi
     requests:
       cpu: 60
-      memory: 235Gi
+      memory: 470Gi
 
   nodeSelector:
-    alpha.eksctl.io/nodegroup-name: graviton-3-cpu-node-group
+    alpha.eksctl.io/nodegroup-name: graviton-3-high-mem-node-group
 
   tolerations:
     - key: sidewinder
@@ -96,7 +96,7 @@ worker:
       memory: 16Gi
 
   nodeSelector:
-    alpha.eksctl.io/nodegroup-name: graviton-3-cpu-node-group
+    alpha.eksctl.io/nodegroup-name: graviton-3-high-mem-node-group
 
   tolerations:
     - key: sidewinder
@@ -148,7 +148,7 @@ client:
       memory: 2Gi
 
   nodeSelector:
-    alpha.eksctl.io/nodegroup-name: graviton-3-cpu-node-group
+    alpha.eksctl.io/nodegroup-name: graviton-3-high-mem-node-group
 
   tolerations:
     - key: sidewinder

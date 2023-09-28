@@ -41,8 +41,8 @@ spec:
       containers:
         - name: {{ .Chart.Name }}
           command: [ "/bin/bash" ]
-          # args: [ "-c", "sleep infinity" ]
-          args: [ "-c", "sidewinder-server" ]
+          args: [ "-c", "sleep infinity" ]
+          # args: [ "-c", "sidewinder-server" ]
           volumeMounts:
             - name: local-volume
               mountPath: /opt/sidewinder/data

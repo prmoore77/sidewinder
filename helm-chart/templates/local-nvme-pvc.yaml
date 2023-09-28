@@ -6,7 +6,7 @@ metadata:
     "helm.sh/resource-policy": keep
 spec:
   storageClassName: local-storage
-  volumeName: local-pv-55ed026 # Change me to whatever the volume provisioner named the PV - this "pins" the server to one node
+  volumeName: local-pv-4aa8bef # Change me to whatever the volume provisioner named the PV - this "pins" the server to one node
   accessModes:
   - ReadWriteOnce
   resources:
