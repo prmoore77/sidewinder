@@ -14,7 +14,7 @@ echo "TPCH_SCALE_FACTOR=${TPCH_SCALE_FACTOR}"
 echo "VIEW_OR_TABLE_OPTION=${VIEW_OR_TABLE_OPTION}"
 
 DATA_DIR="data/tpch/sf=${TPCH_SCALE_FACTOR}"
-DATABASE_FILE="data/tpch_${TPCH_SCALE_FACTOR}.db"
+DATABASE_FILE="data/tpch_${TPCH_SCALE_FACTOR}.duckdb"
 
 pushd "${SCRIPT_DIR}/../"
 echo -e "(Re)creating database file: ${DATABASE_FILE}"
