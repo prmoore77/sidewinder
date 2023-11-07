@@ -39,7 +39,7 @@ dependencies = [
     "pandas==2.1.*",
     "pglast==3.*",
     "psutil==5.9.*",
-    "pyarrow==13.0.0",
+    "pyarrow==14.0.0",
     "python-dateutil==2.8.*",
     "pytz==2023.*",
     "PyYAML==6.0.*",
@@ -48,7 +48,7 @@ dependencies = [
     "SQLAlchemy==2.0.*",
     "sqlparse==0.4.*",
     "urllib3==1.26.*",
-    "websockets==11.0.*",
+    "websockets==12.0.*",
     "zstandard==0.21.*",
     "python-dotenv==1.0.*",
     "cryptography==41.0.*"
