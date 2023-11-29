@@ -131,6 +131,7 @@ async def run_client(
         mtls_password: str,
         username: str,
         password: str,
+        max_result_set_rows: int,
         loop: asyncio.AbstractEventLoop,
         inputs: asyncio.Queue[str],
         stop: asyncio.Future[None],
@@ -205,7 +206,12 @@ async def run_client(
                         print_during_input("< " + message)
                     else:
                         df = get_dataframe_from_bytes(bytes_value=message)
-                        print_during_input(f"Results:\n{df.to_pandas()}")
+                        if (max_result_set_rows > 0) and (df.num_rows > max_result_set_rows):
+                            print_during_input(f"Results (only displaying {max_result_set_rows:,} row(s)):\n{df.to_pandas().head(n=max_result_set_rows)}")
+                        else:
+                            print_during_input(f"Results:\n{df.to_pandas().head(n=10)}")
+
+                        print_during_input(f"\n-----------\nResult set size: {df.num_rows:,} row(s) / {df.nbytes:,} bytes")
                         # Release the semaphore since the result was returned
                         global_semaphore.release()
 
@@ -297,6 +303,14 @@ async def run_client(
     required=True,
     help="The client password associated with the username above"
 )
+@click.option(
+    "--max-result-set-rows",
+    type=int,
+    default=100,
+    show_default=True,
+    required=True,
+    help="The maximum number of rows to show in result sets.  A value of 0 means no limit."
+)
 def main(version: bool,
          server_hostname: str,
          server_port: int,
@@ -305,7 +319,8 @@ def main(version: bool,
          mtls: list,
          mtls_password: str,
          username: str,
-         password: str
+         password: str,
+         max_result_set_rows: int
          ) -> None:
     if version:
         print(f"Sidewinder Client - version: {sidewinder_version}")
@@ -343,7 +358,20 @@ def main(version: bool,
     stop: asyncio.Future[None] = loop.create_future()
 
     # Schedule the task that will manage the connection.
-    loop.create_task(run_client(server_hostname, server_port, tls_verify, tls_roots, mtls, mtls_password, username, password, loop, inputs, stop, ))
+    loop.create_task(run_client(server_hostname=server_hostname,
+                                server_port=server_port,
+                                tls_verify=tls_verify,
+                                tls_roots=tls_roots,
+                                mtls=mtls,
+                                mtls_password=mtls_password,
+                                username=username,
+                                password=password,
+                                max_result_set_rows=max_result_set_rows,
+                                loop=loop,
+                                inputs=inputs,
+                                stop=stop,
+                                )
+                     )
 
     # Start the event loop in a background thread.
     thread = threading.Thread(target=loop.run_forever)
