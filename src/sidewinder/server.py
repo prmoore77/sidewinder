@@ -24,7 +24,7 @@ from .config import logger
 from .constants import SHARD_CONFIRMATION, STARTED, DISTRIBUTED, FAILED, COMPLETED, WORKER_SUCCESS, WORKER_FAILED, DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, \
     SHARD_DATASET, RESULT, SERVER_PORT, USER_LIST_FILENAME
 from .parser.query import Query
-from .utils import combine_bytes_results, get_s3_files, get_shard_files, coro, get_cpu_count, get_memory_limit, run_query, pyarrow
+from .utils import combine_bytes_results, get_s3_files, get_shard_files, coro, get_cpu_count, get_memory_limit, run_query, pyarrow, pre_sign_shard_url
 from .security import TOKEN_DELIMITER, SECRET_KEY, authenticate_user
 from .setup.tls_utilities import DEFAULT_CERT_FILE, DEFAULT_KEY_FILE
 
@@ -417,9 +417,10 @@ class SidewinderWorker:
 
     @property
     async def worker_shard_dict(self):
+        pre_signed_shard_url = await pre_sign_shard_url(shard_file_url=self.shard.shard_file_name)
         return dict(kind=SHARD_DATASET,
                     shard_id=str(self.shard.shard_id),
-                    shard_file_name=self.shard.shard_file_name,
+                    shard_file_name=pre_signed_shard_url,
                     worker_id=str(self.worker_id)
                     )
 

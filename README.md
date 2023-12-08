@@ -57,7 +57,12 @@ pip install sidewinder-db
 ### (The passwords shown are just examples, it is recommended that you use more secure passwords)
 ```shell
 . ./venv/bin/activate
-sidewinder-bootstrap --client-username=scott --client-password=tiger --worker-password=united --tpch-scale-factor=1 --shard-count=11
+sidewinder-bootstrap \
+    --client-username=scott \
+    --client-password=tiger \
+    --worker-password=united \
+    --tpch-scale-factor=1 \
+    --shard-count=11
 ```
 
 ## Run sidewinder locally - from root of repo (use --help option on the executables below for option details)

@@ -7,7 +7,6 @@ import signal
 import ssl
 import sys
 import threading
-from threading import Semaphore
 from time import sleep
 from typing import Any, Set
 
@@ -32,7 +31,6 @@ pd.set_option('display.max_colwidth', None)
 # pd.set_option('display.colheader_justify', 'center')
 pd.set_option('display.precision', 99)
 
-global_semaphore = Semaphore(1)
 
 if sys.platform == "win32":
 
@@ -212,14 +210,9 @@ async def run_client(
                             print_during_input(f"Results:\n{df.to_pandas().head(n=10)}")
 
                         print_during_input(f"\n-----------\nResult set size: {df.num_rows:,} row(s) / {df.nbytes:,} bytes")
-                        # Release the semaphore since the result was returned
-                        global_semaphore.release()
 
             if outgoing in done:
                 message = outgoing.result()
-                # Acquire a semaphore if the command is SQL to prevent exiting before a result is returned by the server
-                if await is_sql_command(message):
-                    global_semaphore.acquire()
                 await websocket.send(message)
 
             if stop in done:
@@ -397,8 +390,6 @@ def main(version: bool,
         # Sleep for a second in case the EOF was called in a bash script
         sleep(1)
 
-        # Acquire the semaphore in order to prevent exiting before server results are returned
-        global_semaphore.acquire()
         loop.call_soon_threadsafe(stop.set_result, None)
 
     # Wait for the event loop to terminate.

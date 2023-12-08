@@ -1,16 +1,20 @@
 import asyncio
 import base64
+import os
 import re
 import shutil
 from functools import wraps
 
 import boto3
-import psutil
-
-import pyarrow
 import duckdb
+import psutil
+import pyarrow
+import requests
+from botocore.config import Config
+from codetiming import Timer
+
 from sidewinder.config import logger
-import os
+from sidewinder.constants import SHARD_URL_EXPIRATION_SECONDS, TIMER_TEXT
 
 
 # taken from: https://donghao.org/2022/01/20/how-to-get-the-number-of-cpu-cores-inside-a-container/
@@ -63,7 +67,8 @@ def get_dataframe_results_as_base64_str(df: pyarrow.Table) -> str:
     return base64.b64encode(get_dataframe_bytes(df)).decode()
 
 
-def combine_bytes_results(result_bytes_list, summary_query, duckdb_threads, duckdb_memory_limit, summarize_results: bool = True) -> bytes:
+def combine_bytes_results(result_bytes_list, summary_query, duckdb_threads, duckdb_memory_limit,
+                          summarize_results: bool = True) -> bytes:
     table_list = []
     for result_bytes in result_bytes_list:
         table_list.append(get_dataframe_from_bytes(bytes_value=result_bytes))
@@ -105,26 +110,30 @@ def run_query(database_file, sql, duckdb_threads, duckdb_memory_limit) -> bytes:
     return get_dataframe_bytes(df=query_result)
 
 
-async def download_s3_file(src: str, dst: str):
-    s3_client = boto3.client("s3")
+async def parse_s3_url(s3_url: str):
+    bucket_name = s3_url.split("/")[2]
+    file_path = "/".join(s3_url.split("/")[3:]).rstrip("/")
 
-    bucket_name = src.split("/")[2]
-    source_file_path = "/".join(src.split("/")[3:])
+    return bucket_name, file_path
 
-    logger.info(msg=f"Downloading S3 file: '{src}' - to path: '{dst}'")
-    try:
-        s3_client.download_file(bucket_name, source_file_path, dst)
-    except Exception as e:
-        raise
-    else:
-        logger.info(msg=f"Successfully downloaded S3 file: '{src}' to destination: '{dst}'")
+
+async def download_file(src: str, dst: str):
+    # Don't print the signature to the log (for security reasons)
+    with Timer(name=f"Downloading shard file - from url: {src.split('?')[0]} to path: {dst}",
+               text=TIMER_TEXT,
+               initial_text=True,
+               logger=logger.info
+               ):
+        req = requests.get(url=src, allow_redirects=True)
+        req.raise_for_status()
+        with open(file=dst, mode="wb") as dst_file:
+            dst_file.write(req.content)
 
 
 async def get_s3_files(shard_data_path):
     s3_client = boto3.client("s3")
 
-    bucket_name = shard_data_path.split("/")[2]
-    file_path = "/".join(shard_data_path.split("/")[3:]) + "/"
+    bucket_name, file_path = await parse_s3_url(s3_url=shard_data_path)
 
     paginator = s3_client.get_paginator('list_objects_v2')
     pages = paginator.paginate(Bucket=bucket_name, Prefix=file_path)
@@ -141,6 +150,22 @@ async def get_s3_files(shard_data_path):
     return s3_files
 
 
+async def pre_sign_shard_url(shard_file_url: str) -> str:
+    if re.search(r"^s3://", shard_file_url):
+        s3_client = boto3.client("s3", config=Config(signature_version='s3v4'))
+
+        bucket, key = await parse_s3_url(s3_url=shard_file_url)
+        return_url = s3_client.generate_presigned_url(
+            ClientMethod="get_object",
+            Params=dict(Bucket=bucket, Key=key),
+            ExpiresIn=SHARD_URL_EXPIRATION_SECONDS
+        )
+    else:
+        return_url = shard_file_url
+
+    return return_url
+
+
 async def get_shard_files(shard_data_path, file_naming_pattern=r"\.tar\.zst$"):
     dir_list = os.listdir(path=shard_data_path)
 
@@ -153,11 +178,11 @@ async def get_shard_files(shard_data_path, file_naming_pattern=r"\.tar\.zst$"):
 
 
 async def copy_database_file(source_path: str, target_path: str) -> str:
-    target_file_name = source_path.split("/")[-1]
+    target_file_name = source_path.split("?")[0].split("/")[-1]
     local_database_file_name = os.path.join(target_path, target_file_name)
 
-    if re.search(r"^s3://", source_path):
-        await download_s3_file(src=source_path, dst=local_database_file_name)
+    if re.search(r"^https://", source_path):
+        await download_file(src=source_path, dst=local_database_file_name)
     else:
         shutil.copy(src=source_path, dst=local_database_file_name)
         logger.info(msg=f"Successfully copied database file: '{source_path}' to path: '{local_database_file_name}'")
