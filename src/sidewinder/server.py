@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from uuid import UUID
 from dotenv import load_dotenv
+from typing import Dict
 
 import click
 import duckdb
@@ -426,7 +427,7 @@ class SidewinderWorker:
         self.ready = False
 
     @property
-    async def worker_shard_dict(self):
+    async def worker_shard_dict(self) -> Dict:
         pre_signed_shard_url = await pre_sign_shard_url(shard_file_url=self.shard.shard_file_name)
         return dict(kind=SHARD_DATASET,
                     shard_id=str(self.shard.shard_id),
