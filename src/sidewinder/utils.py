@@ -6,12 +6,15 @@ import shutil
 from functools import wraps
 
 import boto3
+import hashlib
 import duckdb
 import psutil
 import pyarrow
 import requests
 from botocore.config import Config
 from codetiming import Timer
+from typing import List, Dict, Tuple
+from munch import Munch
 
 from sidewinder.config import logger
 from sidewinder.constants import SHARD_URL_EXPIRATION_SECONDS, TIMER_TEXT
@@ -130,7 +133,19 @@ async def download_file(src: str, dst: str):
             dst_file.write(req.content)
 
 
-async def get_s3_files(shard_data_path):
+async def get_s3_file_hash(bucket_name: str, key: str) -> Tuple[str, str]:
+    s3_client = boto3.client("s3")
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(executor=None, func=lambda: s3_client.head_object(Bucket=bucket_name, Key=key))
+
+    s3_file_hash = result["ETag"].strip('"')
+    s3_file_name = f"s3://{bucket_name}/{key}"
+
+    return s3_file_name, s3_file_hash
+
+
+async def get_s3_shard_files(shard_data_path) -> List[Munch]:
     s3_client = boto3.client("s3")
 
     bucket_name, file_path = await parse_s3_url(s3_url=shard_data_path)
@@ -142,10 +157,18 @@ async def get_s3_files(shard_data_path):
     for page in pages:
         files = page['Contents']
 
-        for file in files:
-            file_name = file['Key']
-            if file_path in file_name and re.search(pattern=r"\.tar\.zst$", string=file_name):
-                s3_files.append(f"s3://{bucket_name}/{file_name}")
+        # Call the get_s3_file_hash function asynchronously for better performance/concurrency
+        for result_tuple in asyncio.as_completed([get_s3_file_hash(bucket_name=bucket_name,
+                                                                   key=file['Key']
+                                                                   )
+                                                 for file in files
+                                                 if file_path in file['Key'] and re.search(pattern=r"\.tar\.zst$", string=file['Key'])
+                                              ]):
+            shard_file_tuple = await result_tuple
+            s3_files.append(Munch(shard_file_name=shard_file_tuple[0],
+                                  shard_file_hash=shard_file_tuple[1]
+                                  )
+                            )
 
     return s3_files
 
@@ -166,13 +189,28 @@ async def pre_sign_shard_url(shard_file_url: str) -> str:
     return return_url
 
 
-async def get_shard_files(shard_data_path, file_naming_pattern=r"\.tar\.zst$"):
+async def get_local_file_hash(file_path: str) -> str:
+    sha256_hash = hashlib.sha256()
+    with open(file_path, "rb") as file:
+        # Read and update hash string value in blocks of 4K
+        for byte_block in iter(lambda: file.read(4096), b""):
+            sha256_hash.update(byte_block)
+
+    return sha256_hash.hexdigest()
+
+
+async def get_local_shard_files(shard_data_path, file_naming_pattern=r"\.tar\.zst$") -> List[Munch]:
     dir_list = os.listdir(path=shard_data_path)
 
     files = []
     for file in dir_list:
         if re.search(pattern=file_naming_pattern, string=file):
-            files.append(os.path.join(shard_data_path, file))
+            file_name = os.path.join(shard_data_path, file)
+            file_hash = await get_local_file_hash(file_path=file_name)
+            files.append(Munch(shard_file_name=file_name,
+                               shard_file_hash=file_hash
+                               )
+                         )
 
     return files
 

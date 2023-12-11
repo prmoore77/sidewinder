@@ -21,10 +21,12 @@ from munch import Munch
 
 from . import __version__ as sidewinder_version
 from .config import logger
-from .constants import SHARD_CONFIRMATION, STARTED, DISTRIBUTED, FAILED, COMPLETED, WORKER_SUCCESS, WORKER_FAILED, DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, \
+from .constants import SHARD_CONFIRMATION, STARTED, DISTRIBUTED, FAILED, COMPLETED, WORKER_SUCCESS, WORKER_FAILED, \
+    DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, \
     SHARD_DATASET, RESULT, SERVER_PORT, USER_LIST_FILENAME
 from .parser.query import Query
-from .utils import combine_bytes_results, get_s3_files, get_shard_files, coro, get_cpu_count, get_memory_limit, run_query, pyarrow, pre_sign_shard_url
+from .utils import combine_bytes_results, get_s3_shard_files, get_local_shard_files, coro, get_cpu_count, \
+    get_memory_limit, run_query, pyarrow, pre_sign_shard_url
 from .security import TOKEN_DELIMITER, SECRET_KEY, authenticate_user
 from .setup.tls_utilities import DEFAULT_CERT_FILE, DEFAULT_KEY_FILE
 
@@ -33,21 +35,25 @@ SIDEWINDER_SERVER_VERSION = sidewinder_version
 
 
 class Shard:
-    def __init__(self, shard_file_name):
+    def __init__(self, shard_file_name: str, shard_file_hash: str):
         self.shard_id = uuid.uuid4()
         self.shard_file_name = shard_file_name
+        self.shard_file_hash = shard_file_hash
         self.distributed = False
 
     @classmethod
     async def get_shards(cls, shard_data_path):
+        logger.info(msg=f"Discovering shards (and getting file hashes) from path: '{shard_data_path}'...")
         if re.search(pattern=r"^s3://", string=shard_data_path):
-            shard_files = await get_s3_files(shard_data_path=shard_data_path)
+            shard_files = await get_s3_shard_files(shard_data_path=shard_data_path)
         else:
-            shard_files = await get_shard_files(shard_data_path=shard_data_path)
+            shard_files = await get_local_shard_files(shard_data_path=shard_data_path)
 
         shards = Munch()
         for shard_file in shard_files:
-            shard = cls(shard_file_name=shard_file)
+            shard = cls(shard_file_name=shard_file.shard_file_name,
+                        shard_file_hash=shard_file.shard_file_hash
+                        )
             shards[shard.shard_id] = shard
 
         logger.info(msg=f"Discovered: {len(shards)} shard(s)...")
@@ -336,13 +342,16 @@ class SidewinderQuery:
             f"Query: '{self.query_id}' - will NOT be distributed - reason: '{', '.join(self.distribute_rationale)}'.  Running server-side...")
 
         try:
+            partial_run_query = functools.partial(run_query,
+                                                  database_file=self.client.server.database_file,
+                                                  sql=self.sql,
+                                                  duckdb_threads=self.client.server.duckdb_threads,
+                                                  duckdb_memory_limit=self.client.server.duckdb_memory_limit
+                                                  )
+
             result_bytes = await self.client.server.event_loop.run_in_executor(
-                self.client.server.process_pool,
-                run_query,
-                self.client.server.database_file,
-                self.sql,
-                self.client.server.duckdb_threads,
-                self.client.server.duckdb_memory_limit
+                executor=self.client.server.process_pool,
+                func=partial_run_query
             )
         except Exception as e:
             self.status = FAILED
@@ -382,7 +391,8 @@ class SidewinderQuery:
                 f"Query: '{self.query_id}' - failed to parse - error: {self.error_message}")
         else:
             self.distribute_rationale = []
-            if self.client.distributed_mode and self.parsed_query.has_aggregates and len(self.client.server.worker_connections) > 0:
+            if self.client.distributed_mode and self.parsed_query.has_aggregates and len(
+                    self.client.server.worker_connections) > 0:
                 self.distribute_query = True
 
             if len(self.client.server.worker_connections) == 0:
@@ -421,6 +431,7 @@ class SidewinderWorker:
         return dict(kind=SHARD_DATASET,
                     shard_id=str(self.shard.shard_id),
                     shard_file_name=pre_signed_shard_url,
+                    shard_file_hash=self.shard.shard_file_hash,
                     worker_id=str(self.worker_id)
                     )
 
@@ -430,10 +441,11 @@ class SidewinderWorker:
                 msg=f"Worker Websocket connection: '{self.websocket_connection.id}' - connected")
 
             await self.websocket_connection.send(json.dumps(dict(kind="Info",
-                                                                 text=(f"Sidewinder Server - version: {self.server.version} - "
-                                                                       f"CPU platform: {platform.machine()} - "
-                                                                       f"TLS: {'Enabled' if self.server.ssl_context else 'Disabled'}"
-                                                                       )
+                                                                 text=(
+                                                                     f"Sidewinder Server - version: {self.server.version} - "
+                                                                     f"CPU platform: {platform.machine()} - "
+                                                                     f"TLS: {'Enabled' if self.server.ssl_context else 'Disabled'}"
+                                                                     )
                                                                  )
                                                             )
                                                  )
@@ -476,23 +488,25 @@ class SidewinderWorker:
 
             # If all workers have responded successfully - send the result to the client
             if query.completed_workers == query.total_workers:
-                results_bytes_list = []
+                result_bytes_list = []
                 for _, worker in query.workers.items():
                     if worker.results:
-                        results_bytes_list.append(worker.results)
+                        result_bytes_list.append(worker.results)
                         # Free up memory
                         worker.results = None
 
                 try:
                     # Run the Arrow synchronous code in another process to avoid blocking the main thread
                     # event loop
-                    result_bytes = await self.server.event_loop.run_in_executor(self.server.process_pool,
-                                                                                combine_bytes_results,
-                                                                                results_bytes_list,
-                                                                                query.parsed_query.summary_query,
-                                                                                self.server.duckdb_threads,
-                                                                                self.server.duckdb_memory_limit,
-                                                                                query.client.summarize_mode
+                    partial_combine_bytes_results = functools.partial(combine_bytes_results,
+                                                                      result_bytes_list=result_bytes_list,
+                                                                      summary_query=query.parsed_query.summary_query,
+                                                                      duckdb_threads=self.server.duckdb_threads,
+                                                                      duckdb_memory_limit=self.server.duckdb_memory_limit,
+                                                                      summarize_results=query.client.summarize_mode
+                                                                      )
+                    result_bytes = await self.server.event_loop.run_in_executor(executor=self.server.process_pool,
+                                                                                func=partial_combine_bytes_results
                                                                                 )
                 except Exception as e:
                     query.status = FAILED
@@ -506,7 +520,8 @@ class SidewinderWorker:
                         await query.send_results_to_client(result_bytes=result_bytes)
                     except Exception as e:
                         # Gracefully handle client disconnects (before results can be sent) to prevent server/worker errors
-                        logger.exception(msg=f"Failed to send results to client: '{query.client.sql_client_id}' - Exception: {str(e)}")
+                        logger.exception(
+                            msg=f"Failed to send results to client: '{query.client.sql_client_id}' - Exception: {str(e)}")
 
     async def process_message(self):
         try:
