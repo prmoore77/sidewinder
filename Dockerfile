@@ -1,4 +1,4 @@
-FROM python:3.11.7
+FROM python:3.12.2
 
 ARG TARGETPLATFORM
 ARG TARGETARCH
@@ -31,7 +31,7 @@ RUN case ${TARGETPLATFORM} in \
     rm -f awscliv2.zip
 
 # Install DuckDB CLI
-ARG DUCKDB_VERSION="0.9.2"
+ARG DUCKDB_VERSION="0.10.0"
 
 RUN case ${TARGETPLATFORM} in \
          "linux/amd64")  DUCKDB_FILE=https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip  ;; \
