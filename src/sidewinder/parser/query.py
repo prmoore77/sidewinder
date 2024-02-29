@@ -8,7 +8,7 @@ from pglast import parser
 def target_is_aggregate(target):
     try:
         for funcname in target.ResTarget.val.FuncCall.funcname:
-            if funcname.String.str in ("sum", "avg", "min", "max", "count"):
+            if funcname.String.sval in ("sum", "avg", "min", "max", "count"):
                 return True
     except AttributeError:
         pass
@@ -42,13 +42,13 @@ class Query(object):
             group_by_clause = ""
             for target in self.select_stmt.targetList:
                 if not target_is_aggregate(target):
-                    column_name = target.ResTarget.val.ColumnRef.fields[-1].String.str
+                    column_name = target.ResTarget.val.ColumnRef.fields[-1].String.sval
                     group_by_clause += f", {column_name}"
                     select_column_sql += f", {column_name}"
                 else:
                     raw_aggregate_function = \
                         target.ResTarget.val.FuncCall.funcname[
-                            0].String.str.upper()
+                            0].String.sval.upper()
                     if raw_aggregate_function in ("SUM", "COUNT"):
                         summary_aggregate_function = "SUM"
                     else:
@@ -58,11 +58,11 @@ class Query(object):
                         column_name = target.ResTarget.name
                     elif getattr(target.ResTarget.val.FuncCall, "agg_star",
                                  False):
-                        column_name = f'"{target.ResTarget.val.FuncCall.funcname[0].String.str}_star()"'
+                        column_name = f'"{target.ResTarget.val.FuncCall.funcname[0].String.sval}_star()"'
                     else:
-                        column_name = (f'"{target.ResTarget.val.FuncCall.funcname[0].String.str}('
+                        column_name = (f'"{target.ResTarget.val.FuncCall.funcname[0].String.sval}('
                                        f'{"DISTINCT " if getattr(target.ResTarget.val.FuncCall, "agg_distinct", False) else ""}'
-                                       f'{target.ResTarget.val.FuncCall.args[0].ColumnRef.fields[-1].String.str})"'
+                                       f'{target.ResTarget.val.FuncCall.args[0].ColumnRef.fields[-1].String.sval})"'
                                        )
 
                     aggregate_clause = f", {summary_aggregate_function} ({column_name}) AS {column_name}"
@@ -82,9 +82,9 @@ class Query(object):
                 comma = ""
                 for sort_column in sort_columns:
                     if hasattr(sort_column.SortBy.node, "ColumnRef"):
-                        column_name = sort_column.SortBy.node.ColumnRef.fields[-1].String.str
+                        column_name = sort_column.SortBy.node.ColumnRef.fields[-1].String.sval
                     elif hasattr(sort_column.SortBy.node, "A_Const"):
-                        column_name = sort_column.SortBy.node.A_Const.val.Integer.ival
+                        column_name = sort_column.SortBy.node.A_Const.ival.ival
                     sort_direction = "ASC" if sort_column.SortBy.sortby_dir == "SORTBY_DEFAULT" else "DESC"
                     sort_nulls = "NULLS FIRST" if sort_column.SortBy.sortby_nulls == "SORTBY_NULLS_DEFAULT" else "NULLS LAST"
                     order_by_clause += f"{comma}{column_name} {sort_direction} {sort_nulls}"
@@ -96,7 +96,7 @@ class Query(object):
             limit_option = getattr(self.select_stmt, "limitCount", None)
             limit_clause = ""
             if limit_option:
-                limit_clause = f"\nLIMIT {limit_option.A_Const.val.Integer.ival}"
+                limit_clause = f"\nLIMIT {limit_option.A_Const.ival.ival}"
 
             return limit_clause
 
