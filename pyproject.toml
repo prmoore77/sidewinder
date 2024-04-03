@@ -30,7 +30,7 @@ dependencies = [
     "botocore==1.34.*",
     "click==8.1.*",
     "codetiming==1.4.*",
-    "duckdb==0.10.0",
+    "duckdb==0.10.1",
     "duckdb-engine==0.11.*",
     "jmespath==1.0.*",
     "mgzip==0.2.*",
