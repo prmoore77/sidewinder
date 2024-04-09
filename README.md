@@ -136,3 +136,11 @@ Platform Downloads:
 [Linux arm64 (aarch64)](https://github.com/duckdb/duckdb/releases/download/v0.10.1/duckdb_cli-linux-aarch64.zip)   
 [MacOS Universal](https://github.com/duckdb/duckdb/releases/download/v0.10.1/duckdb_cli-osx-universal.zip)   
 
+### Handy development commands
+
+#### Version management
+
+##### Bump the version of the application - (you must have installed from source with the [dev] extras)
+```bash
+bumpver update --patch
+```
