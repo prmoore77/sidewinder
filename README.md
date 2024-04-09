@@ -24,15 +24,23 @@ It uses [DuckDB](https://duckdb.org) as its SQL execution engine - and the Postg
 # Setup (to run locally)
 
 ## Install package
+You can install `sidewinder-db` from PyPi or from source.
 
-### Clone the repo
+### Option 1 - from PyPi
 ```shell
-git clone https://github.com/prmoore77/sidewinder
+# Create the virtual environment
+python3 -m venv .venv
+
+# Activate the virtual environment
+. .venv/bin/activate
+
+pip install sidewinder-db
 ```
 
-### Python
-Create a new Python 3.9+ virtual environment and install sidewinder-db with:
+### Option 2 - from source - for development
 ```shell
+git clone https://github.com/prmoore77/sidewinder
+
 cd sidewinder
 
 # Create the virtual environment
@@ -44,13 +52,14 @@ python3 -m venv .venv
 # Upgrade pip, setuptools, and wheel
 pip install --upgrade pip setuptools wheel
 
-# Install Sidewinder-DB (optionally use --editable for development purposes)
-pip install .
+# Install Sidewinder-DB - in editable mode with dev dependencies
+pip install --editable .[dev]
 ```
 
-#### Alternative installation from PyPi
+### Note
+For the following commands - if you running from source and using `--editable` mode (for development purposes) - you will need to set the PYTHONPATH environment variable as follows:
 ```shell
-pip install sidewinder-db
+export PYTHONPATH=$(pwd)/src
 ```
 
 ## Bootstrap the environment by creating a security user list (password file), TLS certificate keypair, and a sample TPC-H dataset with 11 shards
@@ -67,11 +76,6 @@ sidewinder-bootstrap \
 
 ## Run sidewinder locally - from root of repo (use --help option on the executables below for option details)
 
-### Note
-For the following commands - if you are using `--editable` mode (for development purposes) - you will need to set the PYTHONPATH environment variable as follows:
-```shell
-export PYTHONPATH=$(pwd)/src
-```
 
 ### 1) Server:
 #### Open a terminal, then:
