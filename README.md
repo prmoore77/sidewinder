@@ -31,20 +31,20 @@ git clone https://github.com/prmoore77/sidewinder
 ```
 
 ### Python
-Create a new Python 3.8+ virtual environment and install sidewinder-db with:
+Create a new Python 3.9+ virtual environment and install sidewinder-db with:
 ```shell
 cd sidewinder
 
 # Create the virtual environment
-python3 -m venv ./venv
+python3 -m venv .venv
 
 # Activate the virtual environment
-. ./venv/bin/activate
+. .venv/bin/activate
 
 # Upgrade pip, setuptools, and wheel
 pip install --upgrade pip setuptools wheel
 
-# Install Sidewinder-DB
+# Install Sidewinder-DB (optionally use --editable for development purposes)
 pip install .
 ```
 
@@ -56,7 +56,7 @@ pip install sidewinder-db
 ## Bootstrap the environment by creating a security user list (password file), TLS certificate keypair, and a sample TPC-H dataset with 11 shards
 ### (The passwords shown are just examples, it is recommended that you use more secure passwords)
 ```shell
-. ./venv/bin/activate
+. .venv/bin/activate
 sidewinder-bootstrap \
     --client-username=scott \
     --client-password=tiger \
@@ -66,22 +66,29 @@ sidewinder-bootstrap \
 ```
 
 ## Run sidewinder locally - from root of repo (use --help option on the executables below for option details)
+
+### Note
+For the following commands - if you are using `--editable` mode (for development purposes) - you will need to set the PYTHONPATH environment variable as follows:
+```shell
+export PYTHONPATH=$(pwd)/src
+```
+
 ### 1) Server:
 #### Open a terminal, then:
 ```bash
-. ./venv/bin/activate
+. .venv/bin/activate
 sidewinder-server
 ```
 
 ### 2) Worker:
 #### Open another terminal, then start a single worker (using the same worker password you used in the bootstrap command above) with command:
 ```bash
-. ./venv/bin/activate
+. .venv/bin/activate
 sidewinder-worker --tls-roots=tls/server.crt --password=united
 ```
 ##### Note: you can run up to 11 workers for this example configuration, to do that do this instead of starting a single-worker:
 ```bash
-. ./venv/bin/activate
+. .venv/bin/activate
 for x in {1..11}:
 do
   sidewinder-worker --tls-roots=tls/server.crt --password=united &
@@ -96,7 +103,7 @@ kill $(jobs -p)
 ### 3) Client:
 #### Open another terminal, then connect with the client - using the same client username/password you used in the bootstrap command above:
 ```
-. ./venv/bin/activate
+. .venv/bin/activate
 sidewinder-client --tls-roots=tls/server.crt --username=scott --password=tiger
 ```
 

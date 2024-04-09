@@ -53,7 +53,7 @@ USER app_user
 WORKDIR ${APP_DIR}
 
 # Setup a Python Virtual environment
-ENV VIRTUAL_ENV=${APP_DIR}/venv
+ENV VIRTUAL_ENV=${APP_DIR}/.venv
 RUN python3 -m venv ${VIRTUAL_ENV} && \
     echo ". ${VIRTUAL_ENV}/bin/activate" >> ~/.bashrc
 
