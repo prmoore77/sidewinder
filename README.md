@@ -129,12 +129,12 @@ sidewinder-client --tls-roots=tls/server.crt --username=scott --password=tiger
 ```.set summarize = false;```
 
 ### Optional DuckDB CLI (use for data QA purposes, etc.)
-Install DuckDB CLI version [0.10.1](https://github.com/duckdb/duckdb/releases/tag/v0.10.1) - and make sure the executable is on your PATH.
+Install DuckDB CLI version [0.10.2](https://github.com/duckdb/duckdb/releases/tag/v0.10.2) - and make sure the executable is on your PATH.
 
 Platform Downloads:   
-[Linux x86-64](https://github.com/duckdb/duckdb/releases/download/v0.10.1/duckdb_cli-linux-amd64.zip)   
-[Linux arm64 (aarch64)](https://github.com/duckdb/duckdb/releases/download/v0.10.1/duckdb_cli-linux-aarch64.zip)   
-[MacOS Universal](https://github.com/duckdb/duckdb/releases/download/v0.10.1/duckdb_cli-osx-universal.zip)   
+[Linux x86-64](https://github.com/duckdb/duckdb/releases/download/v0.10.2/duckdb_cli-linux-amd64.zip)   
+[Linux arm64 (aarch64)](https://github.com/duckdb/duckdb/releases/download/v0.10.2/duckdb_cli-linux-aarch64.zip)   
+[MacOS Universal](https://github.com/duckdb/duckdb/releases/download/v0.10.2/duckdb_cli-osx-universal.zip)   
 
 ### Handy development commands
 
