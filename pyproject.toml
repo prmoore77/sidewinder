@@ -39,7 +39,7 @@ dependencies = [
     "pandas==2.2.*",
     "pglast==6.2.*",
     "psutil==5.9.*",
-    "pyarrow==15.0.2",
+    "pyarrow==16.0.0",
     "python-dateutil==2.8.*",
     "pytz==2024.*",
     "PyYAML==6.0.*",
