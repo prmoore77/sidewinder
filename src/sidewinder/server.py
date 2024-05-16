@@ -255,6 +255,28 @@ class SidewinderSQLClient:
 
         await self.process_client_commands()
 
+    async def show_client_attribute(self, message):
+        try:
+            match = re.search(pattern=r'^(\.show)\s*(\S*)\s*$', string=message.rstrip(' ;/'))
+            setting = match[2].lower().strip(" ")
+
+            if setting == 'distributed':
+                await self.websocket_connection.send(
+                    f"Distributed set to: {self.distributed_mode.value}")
+            elif setting == "summarize":
+                await self.websocket_connection.send(
+                    f"Summarize set to: {self.summarize_mode}")
+            elif setting == "":
+                await self.websocket_connection.send(
+                    f"Distributed set to: {self.distributed_mode.value}\n" +
+                    f"Summarize set to: {self.summarize_mode}"
+                )
+            else:
+                raise ValueError(f".show command parameter: {setting} is invalid...")
+        except Exception as e:
+            await self.websocket_connection.send(
+                f".show command failed with error: {str(e)}")
+
     async def set_client_attribute(self, message):
         try:
             match = re.search(pattern=r'^\.set (\S+)\s*=\s*(\S+)\s*$', string=message.rstrip(' ;/'))
@@ -283,7 +305,9 @@ class SidewinderSQLClient:
                 if message:
                     logger.info(msg=f"Message received from SQL client: '{self.sql_client_id}' - '{message}'")
 
-                    if re.search(pattern=r'^\.set ', string=message):
+                    if re.search(pattern=r'^\.show\s?', string=message):
+                        await self.show_client_attribute(message=message)
+                    elif re.search(pattern=r'^\.set ', string=message):
                         await self.set_client_attribute(message=message)
                     else:
                         query = SidewinderQuery(sql=message,
