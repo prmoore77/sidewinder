@@ -14,7 +14,7 @@ include = ["*"]  # package names should match these glob patterns (["*"] by defa
 
 [project]
 name = "sidewinder-db"
-version = "0.0.60"
+version = "0.0.61"
 description = "A Python-based Distributed Database"
 readme = "README.md"
 authors = [{ name = "Philip Moore", email = "prmoore77@hotmail.com" }]
@@ -76,7 +76,7 @@ sidewinder-create-duckdb-database-from-parquet = "sidewinder.setup.create_duckdb
 sidewinder-build-shards = "sidewinder.setup.build_shards:main"
 
 [tool.bumpver]
-current_version = "0.0.60"
+current_version = "0.0.61"
 version_pattern = "MAJOR.MINOR.PATCH[PYTAGNUM]"
 commit_message = "bump version {old_version} -> {new_version}"
 commit = true
