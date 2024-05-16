@@ -16,8 +16,8 @@ from munch import Munch, munchify
 
 from . import __version__ as sidewinder_version
 from .config import logger
-from .constants import DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, SHARD_CONFIRMATION, SHARD_DATASET, INFO, QUERY, ERROR, RESULT, WORKER_FAILED, WORKER_SUCCESS, SERVER_PORT
-from .utils import coro, pyarrow, get_dataframe_results_as_base64_str, get_cpu_count, get_memory_limit, copy_database_file
+from .constants import DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, SHARD_CONFIRMATION, SHARD_DATASET, INFO, QUERY, ERROR, RESULT, WORKER_FAILED, WORKER_SUCCESS, SERVER_PORT, ARROW_RESULT_TYPE
+from .utils import coro, pyarrow, get_dataframe_results_as_ipc_base64_str, get_cpu_count, get_memory_limit, copy_database_file
 
 # Constants
 CTAS_RETRY_LIMIT = 3
@@ -223,7 +223,8 @@ class Worker:
                                        query_id=query_message.query_id,
                                        status=WORKER_SUCCESS,
                                        error_message=None,
-                                       results=get_dataframe_results_as_base64_str(df)
+                                       result_type=ARROW_RESULT_TYPE,
+                                       results=get_dataframe_results_as_ipc_base64_str(df)
                                        )
                     logger.info(msg=f"Query: {query_message.query_id} - Succeeded - (row count: {df.num_rows} / size: {df.get_total_buffer_size()})")
                 finally:

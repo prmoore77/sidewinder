@@ -19,7 +19,7 @@ from websockets.legacy.client import connect
 
 from . import __version__ as sidewinder_version
 from .constants import SERVER_PORT
-from .utils import get_dataframe_from_bytes
+from .utils import get_dataframe_from_ipc_bytes
 
 # Misc. Constants
 SIDEWINDER_CLIENT_VERSION = sidewinder_version
@@ -203,11 +203,11 @@ async def run_client(
                     if isinstance(message, str):
                         print_during_input("< " + message)
                     else:
-                        df = get_dataframe_from_bytes(bytes_value=message)
+                        df = get_dataframe_from_ipc_bytes(bytes_value=message)
                         if (max_result_set_rows > 0) and (df.num_rows > max_result_set_rows):
                             print_during_input(f"Results (only displaying {max_result_set_rows:,} row(s)):\n{df.to_pandas().head(n=max_result_set_rows)}")
                         else:
-                            print_during_input(f"Results:\n{df.to_pandas().head(n=10)}")
+                            print_during_input(f"Results:\n{df.to_pandas()}")
 
                         print_during_input(f"\n-----------\nResult set size: {df.num_rows:,} row(s) / {df.nbytes:,} bytes")
 

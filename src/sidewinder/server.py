@@ -10,14 +10,15 @@ import sys
 import uuid
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from datetime import datetime
+from enum import StrEnum, auto
 from pathlib import Path
-from uuid import UUID
-from dotenv import load_dotenv
 from typing import Dict
+from uuid import UUID
 
 import click
 import duckdb
 import websockets
+from dotenv import load_dotenv
 from munch import Munch
 
 from . import __version__ as sidewinder_version
@@ -26,13 +27,19 @@ from .constants import SHARD_CONFIRMATION, STARTED, DISTRIBUTED, FAILED, COMPLET
     DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, \
     SHARD_DATASET, RESULT, SERVER_PORT, USER_LIST_FILENAME
 from .parser.query import Query
+from .security import SECRET_KEY, authenticate_user
+from .setup.tls_utilities import DEFAULT_CERT_FILE, DEFAULT_KEY_FILE
 from .utils import combine_bytes_results, get_s3_shard_files, get_local_shard_files, coro, get_cpu_count, \
     get_memory_limit, run_query, pyarrow, pre_sign_shard_url
-from .security import TOKEN_DELIMITER, SECRET_KEY, authenticate_user
-from .setup.tls_utilities import DEFAULT_CERT_FILE, DEFAULT_KEY_FILE
 
 # Misc. Constants
 SIDEWINDER_SERVER_VERSION = sidewinder_version
+
+
+class DistributeMode(StrEnum):
+    TRUE = auto()
+    FALSE = auto()
+    FORCE = auto()
 
 
 class Shard:
@@ -231,7 +238,7 @@ class SidewinderSQLClient:
         self.server = server
         self.websocket_connection = websocket_connection
         self.sql_client_id = self.websocket_connection.id
-        self.distributed_mode = True
+        self.distributed_mode: DistributeMode = DistributeMode.TRUE
         self.summarize_mode = True
 
     async def connect(self):
@@ -255,9 +262,9 @@ class SidewinderSQLClient:
             value = match[2].upper()
 
             if setting == 'distributed':
-                distributed_mode = (value == "TRUE")
+                distributed_mode: DistributeMode = DistributeMode[value]
                 await self.websocket_connection.send(
-                    f"Distributed set to: {distributed_mode}")
+                    f"Distributed set to: {distributed_mode.value}")
                 self.distributed_mode = distributed_mode
             elif setting == "summarize":
                 summarize_mode = (value == "TRUE")
@@ -304,6 +311,7 @@ class SidewinderQuery:
         self.end_time = None
         self.response_sent_to_client = False
         self.distribute_query = None
+        self.summarize_query = None
         self.distribute_rationale = None
 
         self.parsed_successfully = None
@@ -392,21 +400,26 @@ class SidewinderQuery:
                 f"Query: '{self.query_id}' - failed to parse - error: {self.error_message}")
         else:
             self.distribute_rationale = []
-            if self.client.distributed_mode and self.parsed_query.has_aggregates and len(
+            if self.client.distributed_mode == DistributeMode.FORCE:
+                self.distribute_query = True
+                self.summarize_query = False
+                self.distribute_rationale.append("Client has forced query distribution")
+            elif self.client.distributed_mode == DistributeMode.TRUE and self.parsed_query.has_aggregates and len(
                     self.client.server.worker_connections) > 0:
                 self.distribute_query = True
+                self.summarize_query = self.client.summarize_mode
+            else:
+                if len(self.client.server.worker_connections) == 0:
+                    self.distribute_query = False
+                    self.distribute_rationale.append("There are no workers connected to the server")
 
-            if len(self.client.server.worker_connections) == 0:
-                self.distribute_query = False
-                self.distribute_rationale.append("There are no workers connected to the server")
+                if not self.parsed_query.has_aggregates:
+                    self.distribute_query = False
+                    self.distribute_rationale.append("Query contains no aggregates")
 
-            if not self.parsed_query.has_aggregates:
-                self.distribute_query = False
-                self.distribute_rationale.append("Query contains no aggregates")
-
-            if not self.client.distributed_mode:
-                self.distribute_query = False
-                self.distribute_rationale.append("Client distributed mode is disabled")
+                if self.client.distributed_mode == DistributeMode.FALSE:
+                    self.distribute_query = False
+                    self.distribute_rationale.append("Client distributed mode is disabled")
 
             if self.distribute_query:
                 await self.distribute_to_workers()
@@ -484,6 +497,7 @@ class SidewinderWorker:
                 query.response_sent_to_client = True
                 query.status = FAILED
         elif worker_message.status == WORKER_SUCCESS:
+            query.workers[self.worker_id].result_type = worker_message.result_type
             query.workers[self.worker_id].results = base64.b64decode(worker_message.results)
             query.completed_workers += 1
 
@@ -492,7 +506,10 @@ class SidewinderWorker:
                 result_bytes_list = []
                 for _, worker in query.workers.items():
                     if worker.results:
-                        result_bytes_list.append(worker.results)
+                        result_bytes_list.append(dict(result_type=worker.result_type,
+                                                      results=worker.results
+                                                      )
+                                                 )
                         # Free up memory
                         worker.results = None
 
@@ -504,7 +521,7 @@ class SidewinderWorker:
                                                                       summary_query=query.parsed_query.summary_query,
                                                                       duckdb_threads=self.server.duckdb_threads,
                                                                       duckdb_memory_limit=self.server.duckdb_memory_limit,
-                                                                      summarize_results=query.client.summarize_mode
+                                                                      summarize_results=query.summarize_query
                                                                       )
                     result_bytes = await self.server.event_loop.run_in_executor(executor=self.server.process_pool,
                                                                                 func=partial_combine_bytes_results

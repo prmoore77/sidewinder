@@ -1,23 +1,23 @@
 import asyncio
 import base64
+import hashlib
 import os
 import re
 import shutil
 from functools import wraps
+from typing import List, Tuple
 
 import boto3
-import hashlib
 import duckdb
 import psutil
 import pyarrow
 import requests
+from pyarrow import parquet as pq
 from botocore.config import Config
 from codetiming import Timer
-from typing import List, Dict, Tuple
 from munch import Munch
-
 from sidewinder.config import logger
-from sidewinder.constants import SHARD_URL_EXPIRATION_SECONDS, TIMER_TEXT
+from sidewinder.constants import SHARD_URL_EXPIRATION_SECONDS, TIMER_TEXT, PARQUET_RESULT_TYPE, ARROW_RESULT_TYPE
 
 
 # taken from: https://donghao.org/2022/01/20/how-to-get-the-number-of-cpu-cores-inside-a-container/
@@ -54,11 +54,15 @@ def coro(f):
     return wrapper
 
 
-def get_dataframe_from_bytes(bytes_value: bytes) -> pyarrow.Table:
+def get_dataframe_from_ipc_bytes(bytes_value: bytes) -> pyarrow.Table:
     return pyarrow.ipc.open_stream(bytes_value).read_all()
 
 
-def get_dataframe_bytes(df: pyarrow.Table) -> bytes:
+def get_dataframe_from_parquet_bytes(bytes_value: bytes) -> pyarrow.Table:
+    return pq.read_table(source=pyarrow.BufferReader(pyarrow.py_buffer(bytes_value)))
+
+
+def get_dataframe_ipc_bytes(df: pyarrow.Table) -> bytes:
     sink = pyarrow.BufferOutputStream()
     with pyarrow.ipc.new_stream(sink, df.schema) as writer:
         writer.write(df)
@@ -66,15 +70,18 @@ def get_dataframe_bytes(df: pyarrow.Table) -> bytes:
     return buf.to_pybytes()
 
 
-def get_dataframe_results_as_base64_str(df: pyarrow.Table) -> str:
-    return base64.b64encode(get_dataframe_bytes(df)).decode()
+def get_dataframe_results_as_ipc_base64_str(df: pyarrow.Table) -> str:
+    return base64.b64encode(get_dataframe_ipc_bytes(df)).decode()
 
 
 def combine_bytes_results(result_bytes_list, summary_query, duckdb_threads, duckdb_memory_limit,
                           summarize_results: bool = True) -> bytes:
     table_list = []
     for result_bytes in result_bytes_list:
-        table_list.append(get_dataframe_from_bytes(bytes_value=result_bytes))
+        if result_bytes.get("result_type") == ARROW_RESULT_TYPE:
+            table_list.append(get_dataframe_from_ipc_bytes(bytes_value=result_bytes.get("results")))
+        elif result_bytes.get("result_type") == PARQUET_RESULT_TYPE:
+            table_list.append(get_dataframe_from_parquet_bytes(bytes_value=result_bytes.get("results")))
 
     combined_result = pyarrow.concat_tables(tables=table_list)
 
@@ -91,7 +98,7 @@ def combine_bytes_results(result_bytes_list, summary_query, duckdb_threads, duck
         logger.warning(msg=f"NOT running summarization query - b/c client summarization mode is False...'")
         summarized_result = combined_result
 
-    return get_dataframe_bytes(df=summarized_result)
+    return get_dataframe_ipc_bytes(df=summarized_result)
 
 
 def duckdb_execute(con, sql: str):
@@ -110,12 +117,12 @@ def run_query(database_file, sql, duckdb_threads, duckdb_memory_limit) -> bytes:
 
     query_result = con.execute(sql).fetch_arrow_table()
 
-    return get_dataframe_bytes(df=query_result)
+    return get_dataframe_ipc_bytes(df=query_result)
 
 
 async def parse_s3_url(s3_url: str):
     bucket_name = s3_url.split("/")[2]
-    file_path = "/".join(s3_url.split("/")[3:]).rstrip("/")
+    file_path = "/".join(s3_url.split("/")[3:])
 
     return bucket_name, file_path
 
