@@ -16,8 +16,8 @@ from munch import Munch, munchify
 
 from . import __version__ as sidewinder_version
 from .config import logger
-from .constants import DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, SHARD_CONFIRMATION, SHARD_DATASET, INFO, QUERY, ERROR, RESULT, WORKER_FAILED, WORKER_SUCCESS, SERVER_PORT, ARROW_RESULT_TYPE
-from .utils import coro, pyarrow, get_dataframe_results_as_ipc_base64_str, get_cpu_count, get_memory_limit, copy_database_file
+from .constants import DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, SHARD_REQUEST, SHARD_CONFIRMATION, SHARD_DATASET, INFO, QUERY, ERROR, RESULT, WORKER_FAILED, WORKER_SUCCESS, SERVER_PORT, ARROW_RESULT_TYPE
+from .utils import coro, pyarrow, get_dataframe_results_as_ipc_base64_str, get_cpu_count, get_memory_limit, copy_database_file, get_local_file_hash
 
 # Constants
 CTAS_RETRY_LIMIT = 3
@@ -54,6 +54,7 @@ class Worker:
         self.ready = False
         self.local_database_dir = None
         self.local_shard_database_file_name = None
+        self.local_shard_file_hash = None
         self.db_connection = None
 
         # Setup TLS/SSL if requested
@@ -133,6 +134,9 @@ class Worker:
                                                                        target_path=self.local_database_dir
                                                                        )
 
+        # Compute a SHA256 hash of the local shard file...
+        self.local_shard_file_hash = await get_local_file_hash(file_path=self.local_shard_database_file_name)
+
         db_connection = await self.build_database_from_compressed_tarfile(compressed_tarfile_name=self.local_shard_database_file_name)
 
         db_connection.execute(query=f"PRAGMA threads={self.duckdb_threads}")
@@ -140,6 +144,7 @@ class Worker:
 
         shard_confirmed_dict = dict(kind=SHARD_CONFIRMATION,
                                     shard_id=self.shard_id,
+                                    shard_file_hash=self.local_shard_file_hash,
                                     successful=True
                                     )
         await self.websocket.send(json.dumps(shard_confirmed_dict).encode())
@@ -172,6 +177,10 @@ class Worker:
                 # Authenticate
                 token = f"{self.username}:{self.password}"
                 await self.websocket.send(message=token)
+
+                # Request a shard
+                shard_request_dict = dict(kind=SHARD_REQUEST)
+                await self.websocket.send(message=json.dumps(shard_request_dict).encode())
 
                 logger.info(msg=f"Successfully connected to server uri: '{self.server_uri}' - as user: '{self.username}' - connection: '{self.websocket.id}'")
                 await self.process_server_messages()

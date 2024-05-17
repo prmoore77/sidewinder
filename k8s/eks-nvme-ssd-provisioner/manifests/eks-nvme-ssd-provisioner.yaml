@@ -24,7 +24,7 @@ spec:
       priorityClassName: system-node-critical
       containers:
       - name: eks-nvme-ssd-provisioner
-        image: 795371563663.dkr.ecr.us-east-2.amazonaws.com/nvme
+        image: 734116910324.dkr.ecr.us-east-2.amazonaws.com/nvme
         imagePullPolicy: Always
         securityContext:
           privileged: true

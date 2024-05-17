@@ -23,7 +23,7 @@ from munch import Munch
 
 from . import __version__ as sidewinder_version
 from .config import logger
-from .constants import SHARD_CONFIRMATION, STARTED, DISTRIBUTED, FAILED, COMPLETED, WORKER_SUCCESS, WORKER_FAILED, \
+from .constants import SHARD_REQUEST, SHARD_CONFIRMATION, STARTED, DISTRIBUTED, FAILED, COMPLETED, WORKER_SUCCESS, WORKER_FAILED, \
     DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, \
     SHARD_DATASET, RESULT, SERVER_PORT, USER_LIST_FILENAME
 from .parser.query import Query
@@ -221,10 +221,8 @@ class SidewinderServer:
         await self.authenticate_socket(websocket_connection=worker_websocket)
 
         # Get a shard that hasn't been passed out yet...
-        shard = await self.get_next_shard()
         worker = SidewinderWorker(server=self,
-                                  websocket_connection=worker_websocket,
-                                  shard=shard
+                                  websocket_connection=worker_websocket
                                   )
         self.worker_connections[worker.worker_id] = worker
         await worker.connect()
@@ -454,13 +452,12 @@ class SidewinderQuery:
 class SidewinderWorker:
     def __init__(self,
                  server: SidewinderServer,
-                 websocket_connection,
-                 shard: Shard
+                 websocket_connection
                  ):
         self.server = server
         self.websocket_connection = websocket_connection
         self.worker_id = self.websocket_connection.id
-        self.shard = shard
+        self.shard = None
         self.ready = False
 
     @property
@@ -488,23 +485,28 @@ class SidewinderWorker:
                                                             )
                                                  )
 
-            logger.info(
-                msg=f"Sending info for shard: '{self.shard.shard_id}' ({self.shard}) to worker: '{self.worker_id}'...")
-
-            worker_shard_message = json.dumps(await self.worker_shard_dict).encode()
-            await self.websocket_connection.send(worker_shard_message)
-            logger.info(
-                msg=f"Sent worker: '{self.worker_id}' - shard info for shard: '{self.shard.shard_id}' - size: {len(worker_shard_message)}")
-
             await self.process_message()
 
         finally:
             logger.warning(msg=f"Worker: '{self.worker_id}' has disconnected.")
-            self.shard.distributed = False
-            self.shard.confirmed = False
+            if self.shard:
+                self.shard.distributed = False
+                self.shard.confirmed = False
             del self.server.worker_connections[self.worker_id]
 
+    async def process_shard_request(self, worker_message: Munch):
+        self.shard = await self.server.get_next_shard()
+        logger.info(
+            msg=f"Sending info for shard: '{self.shard.shard_id}' to worker: '{self.worker_id}'...")
+
+        worker_shard_message = json.dumps(await self.worker_shard_dict).encode()
+        await self.websocket_connection.send(worker_shard_message)
+        logger.info(
+            msg=f"Sent worker: '{self.worker_id}' - shard info for shard: '{self.shard.shard_id}' - size: {len(worker_shard_message)}")
+
     async def process_shard_confirmation(self, worker_message: Munch):
+        # To do: compare the shard file hash to the server's version
+        # To do: allow workers to persist shards locally, and send shard info not requested
         logger.info(
             msg=f"Worker: '{self.worker_id}' has confirmed its shard: '{worker_message.shard_id}' - and "
                 f"is ready to process queries.")
@@ -572,9 +574,11 @@ class SidewinderWorker:
                     worker_message = Munch(json.loads(message.decode()))
                     logger.info(
                         msg=f"Message (kind={worker_message.kind}) received from Worker: '{self.worker_id}'"
-                            f" (shard: '{self.shard.shard_id}') - size: {len(message)}")
+                            f" (shard: '{self.shard.shard_id if self.shard else 'n/a'}') - size: {len(message)}")
 
-                    if worker_message.kind == SHARD_CONFIRMATION:
+                    if worker_message.kind == SHARD_REQUEST:
+                        await self.process_shard_request(worker_message=worker_message)
+                    elif worker_message.kind == SHARD_CONFIRMATION:
                         await self.process_shard_confirmation(worker_message=worker_message)
                     elif worker_message.kind == RESULT:
                         await self.process_worker_result(worker_message=worker_message)
