@@ -4,8 +4,8 @@
 
 server:
   config:
-    databaseFile: data/ssb_sf1000.duckdb
-    shardDataPath: s3://voltrondata-sidewinder/shards/ssb/sf=1000
+    databaseFile: data/tpch_sf1.db
+    shardDataPath: s3://voltrondata-sidewinder/shards/tpch/1/
     pingTimeout: 900
 
   replicaCount: 1
@@ -34,19 +34,19 @@ server:
     # runAsUser: 1000
 
   service:
-    type: ClusterIP
+    type: LoadBalancer
     port: 8765
 
   resources:
     limits:
-      cpu: 60
-      memory: 470Gi
+      cpu: 4
+      memory: 16Gi
     requests:
-      cpu: 60
-      memory: 470Gi
+      cpu: 4
+      memory: 16Gi
 
   nodeSelector:
-    alpha.eksctl.io/nodegroup-name: graviton-3-high-mem-node-group
+    eks.amazonaws.com/nodegroup: arm64-hm-node-pool-2023120516275744210000001a
 
   tolerations:
     - key: sidewinder
@@ -89,14 +89,14 @@ worker:
 
   resources:
     limits:
-      cpu: 4
-      memory: 16Gi
+      cpu: 1
+      memory: 4Gi
     requests:
-      cpu: 4
-      memory: 16Gi
+      cpu: 1
+      memory: 4Gi
 
   nodeSelector:
-    alpha.eksctl.io/nodegroup-name: graviton-3-high-mem-node-group
+    eks.amazonaws.com/nodegroup: arm64-hm-node-pool-2023120516275744210000001a
 
   tolerations:
     - key: sidewinder
@@ -148,7 +148,7 @@ client:
       memory: 2Gi
 
   nodeSelector:
-    alpha.eksctl.io/nodegroup-name: graviton-3-high-mem-node-group
+    eks.amazonaws.com/nodegroup: arm64-hm-node-pool-2023120516275744210000001a
 
   tolerations:
     - key: sidewinder
