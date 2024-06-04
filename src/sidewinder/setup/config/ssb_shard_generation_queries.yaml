@@ -7,10 +7,10 @@ tables:
   - name: customer
     parent_table_name: ''
     query_template: |-
-      SELECT CAST ({shard_id} AS INTEGER) AS shard_id
+      SELECT CAST ({shard_number} AS INTEGER) AS shard_number
            , customer.* 
         FROM read_parquet('{data_path}/customer/customer.*.parquet') AS customer
-       WHERE mod (abs (hash (c_custkey)), {overall_shard_count}) + 1 = {shard_id}
+       WHERE mod (abs (hash (c_custkey)), {overall_shard_count}) + 1 = {shard_number}
   - name: lineorder
     parent_table_name: customer
     query_template: |-

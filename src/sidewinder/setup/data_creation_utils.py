@@ -7,7 +7,6 @@ import os
 
 # Constants
 SCRIPT_DIR = Path(__file__).parent.resolve()
-DATA_DIR = Path("data").resolve()
 
 
 def execute_query(conn: duckdb.DuckDBPyConnection,

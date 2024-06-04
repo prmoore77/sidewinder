@@ -3,7 +3,8 @@ import duckdb
 import click
 from pathlib import Path
 import shutil
-from .data_creation_utils import execute_query, DATA_DIR, get_printable_number
+from .data_creation_utils import execute_query, get_printable_number
+from sidewinder.config import DATA_DIR
 
 
 def generate_tpch_parquet_data(tpch_scale_factor: int,

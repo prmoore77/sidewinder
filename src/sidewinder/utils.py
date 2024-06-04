@@ -196,7 +196,7 @@ async def pre_sign_shard_url(shard_file_url: str) -> str:
     return return_url
 
 
-async def get_local_file_hash(file_path: str) -> str:
+def get_sha256_hash(file_path: str) -> str:
     sha256_hash = hashlib.sha256()
     with open(file_path, "rb") as file:
         # Read and update hash string value in blocks of 4K
@@ -206,20 +206,14 @@ async def get_local_file_hash(file_path: str) -> str:
     return sha256_hash.hexdigest()
 
 
-async def get_local_shard_files(shard_data_path, file_naming_pattern=r"\.tar\.zst$") -> List[Munch]:
-    dir_list = os.listdir(path=shard_data_path)
+def get_md5_hash(file_path: str) -> str:
+    md5_hash = hashlib.md5()
+    with open(file_path, "rb") as file:
+        # Read and update hash string value in blocks of 4K
+        for byte_block in iter(lambda: file.read(4096), b""):
+            md5_hash.update(byte_block)
 
-    files = []
-    for file in dir_list:
-        if re.search(pattern=file_naming_pattern, string=file):
-            file_name = os.path.join(shard_data_path, file)
-            file_hash = await get_local_file_hash(file_path=file_name)
-            files.append(Munch(shard_file_name=file_name,
-                               shard_file_hash=file_hash
-                               )
-                         )
-
-    return files
+    return md5_hash.hexdigest()
 
 
 async def copy_database_file(source_path: str, target_path: str) -> str:

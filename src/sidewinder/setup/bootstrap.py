@@ -5,9 +5,9 @@ import click
 
 from .build_shards import build_shards
 from .create_duckdb_database_from_parquet import create_duckdb_database_from_parquet
-from .data_creation_utils import get_printable_number, DATA_DIR, SCRIPT_DIR
+from .data_creation_utils import get_printable_number, SCRIPT_DIR
 from .generate_tpch_parquet_data import generate_tpch_parquet_data
-from ..config import logger
+from ..config import logger, DATA_DIR
 from ..security import create_user, SECRET_KEY
 from ..constants import USER_LIST_FILENAME
 from .tls_utilities import create_tls_keypair, DEFAULT_CERT_FILE, DEFAULT_KEY_FILE
@@ -91,6 +91,14 @@ SEPARATOR = ("=" * 80)
     help="The number of shards to create"
 )
 @click.option(
+    "--shard-manifest-file",
+    type=str,
+    default=(DATA_DIR / "shards" / "manifests" / "local_tpch_sf1_shard_manifest.yaml").as_posix(),
+    required=True,
+    show_default=True,
+    help="The output file path will have details about the shards created by this process."
+)
+@click.option(
     "--overwrite/--no-overwrite",
     type=bool,
     default=False,
@@ -108,6 +116,7 @@ def sidewinder_bootstrap(tls_cert_file: str,
                          tpch_scale_factor: float,
                          data_directory: str,
                          shard_count: int,
+                         shard_manifest_file: str,
                          overwrite: bool
                          ):
     logger.info(msg=("Running sidewinder_bootstrap - with parameters: "
@@ -121,6 +130,7 @@ def sidewinder_bootstrap(tls_cert_file: str,
                      f"--tpch-scale-factor={tpch_scale_factor} "
                      f"--data-directory='{data_directory}' "
                      f"--shard_count={shard_count} "
+                     f"--shard-manifest-file={shard_manifest_file} "
                      f"--overwrite={overwrite}"
                      )
                 )
@@ -159,6 +169,7 @@ def sidewinder_bootstrap(tls_cert_file: str,
     printable_tpch_scale_factor = get_printable_number(tpch_scale_factor)
     build_shards(shard_definition_file=(SCRIPT_DIR / "config" / "tpch_shard_generation_queries.yaml").as_posix(),
                  shard_count=shard_count,
+                 shard_manifest_file=shard_manifest_file,
                  source_data_path=parquet_path.as_posix(),
                  output_data_path=(Path(data_directory) / "shards" / "tpch" / f"sf={printable_tpch_scale_factor}").as_posix(),
                  overwrite=overwrite

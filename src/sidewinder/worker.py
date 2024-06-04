@@ -17,7 +17,7 @@ from munch import Munch, munchify
 from . import __version__ as sidewinder_version
 from .config import logger
 from .constants import DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, SHARD_REQUEST, SHARD_CONFIRMATION, SHARD_DATASET, INFO, QUERY, ERROR, RESULT, WORKER_FAILED, WORKER_SUCCESS, SERVER_PORT, ARROW_RESULT_TYPE
-from .utils import coro, pyarrow, get_dataframe_results_as_ipc_base64_str, get_cpu_count, get_memory_limit, copy_database_file, get_local_file_hash
+from .utils import coro, pyarrow, get_dataframe_results_as_ipc_base64_str, get_cpu_count, get_memory_limit, copy_database_file, get_sha256_hash, get_md5_hash
 
 # Constants
 CTAS_RETRY_LIMIT = 3
@@ -54,7 +54,8 @@ class Worker:
         self.ready = False
         self.local_database_dir = None
         self.local_shard_database_file_name = None
-        self.local_shard_file_hash = None
+        self.local_shard_file_sha256_hash = None
+        self.local_shard_file_md5_hash = None
         self.db_connection = None
 
         # Setup TLS/SSL if requested
@@ -127,7 +128,7 @@ class Worker:
         self.worker_id = message.worker_id
         logger.info(msg=f"Worker ID is: '{self.worker_id}'")
         self.shard_id = message.shard_id
-        logger.info(msg=f"Received shard information for shard: '{self.shard_id}'")
+        logger.info(msg=f"Received shard information for shard: '{self.shard_id}' - details: {message}")
 
         # Get/copy the shard database file...
         self.local_shard_database_file_name = await copy_database_file(source_path=message.shard_file_name,
@@ -135,7 +136,18 @@ class Worker:
                                                                        )
 
         # Compute a SHA256 hash of the local shard file...
-        self.local_shard_file_hash = await get_local_file_hash(file_path=self.local_shard_database_file_name)
+        self.local_shard_file_sha256_hash = get_sha256_hash(file_path=self.local_shard_database_file_name)
+
+        # Compare the hash with the one sent by the server...
+        if self.local_shard_file_sha256_hash != message.shard_file_sha256_hash:
+            error_message = f"Local shard file SHA256 hash: '{self.local_shard_file_sha256_hash}' does NOT match the server's hash: '{message.shard_file_sha256_hash}'"
+            logger.error(msg=error_message)
+            raise RuntimeError(error_message)
+        else:
+            logger.info(msg=f"Local shard file SHA256 hash: '{self.local_shard_file_sha256_hash}' matches the server's hash: '{message.shard_file_sha256_hash}'")
+
+        # Compute an MD5 hash of the local shard file...
+        self.local_shard_file_md5_hash = get_md5_hash(file_path=self.local_shard_database_file_name)
 
         db_connection = await self.build_database_from_compressed_tarfile(compressed_tarfile_name=self.local_shard_database_file_name)
 
@@ -144,7 +156,7 @@ class Worker:
 
         shard_confirmed_dict = dict(kind=SHARD_CONFIRMATION,
                                     shard_id=self.shard_id,
-                                    shard_file_hash=self.local_shard_file_hash,
+                                    shard_file_md5_hash=self.local_shard_file_md5_hash,
                                     successful=True
                                     )
         await self.websocket.send(json.dumps(shard_confirmed_dict).encode())

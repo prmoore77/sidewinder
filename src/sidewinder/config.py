@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+from pathlib import Path
 
 # Setup logging
 logging.basicConfig(format='%(asctime)s - %(levelname)-8s %(message)s',
@@ -10,3 +11,6 @@ logging.basicConfig(format='%(asctime)s - %(levelname)-8s %(message)s',
                     )
 
 logger = logging.getLogger()
+
+# Constants
+DATA_DIR = Path("data").resolve()

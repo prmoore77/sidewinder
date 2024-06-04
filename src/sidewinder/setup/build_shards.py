@@ -3,6 +3,7 @@ import pathlib
 import re
 import shutil
 import tarfile
+import uuid
 from tempfile import TemporaryDirectory
 
 import boto3
@@ -12,10 +13,12 @@ import yaml
 import zstandard
 from codetiming import Timer
 from munch import munchify, Munch
+from datetime import datetime, UTC
+import hashlib
 
-from .data_creation_utils import DATA_DIR, SCRIPT_DIR
-from ..config import logger
-from ..utils import get_cpu_count, get_memory_limit
+from .data_creation_utils import SCRIPT_DIR
+from ..config import logger, DATA_DIR
+from ..utils import get_cpu_count, get_memory_limit, get_sha256_hash, get_md5_hash
 
 # Constants
 TIMER_TEXT = "{name}: Elapsed time: {:.4f} seconds"
@@ -25,13 +28,13 @@ DEFAULT_ZSTD_COMPRESSION_LEVEL = 3
 def generate_shard_query_list(shard_tables: Munch,
                               data_path: str,
                               shard_count: int,
-                              shard_id: int,
+                              shard_number: int,
                               parent_table_name: str = "") -> []:
     shard_query_list = []
     for table in shard_tables.tables:
         if table.parent_table_name == parent_table_name:
             format_dict = dict(overall_shard_count=shard_count,
-                               shard_id=shard_id,
+                               shard_number=shard_number,
                                parent_table_dataset=parent_table_name,
                                data_path=data_path
                                )
@@ -39,7 +42,7 @@ def generate_shard_query_list(shard_tables: Munch,
             shard_query_list.append(Munch(table_name=table.name, query=table_generation_query))
 
             # Call the routine recursively to get the tree of tables...
-            shard_query_list += generate_shard_query_list(shard_tables, data_path, shard_count, shard_id,
+            shard_query_list += generate_shard_query_list(shard_tables, data_path, shard_count, shard_number,
                                                           table.name)
 
     return shard_query_list
@@ -60,7 +63,7 @@ def copy_shard_file(src: str, dst: str):
 
 
 def build_shard(shard_tables: Munch,
-                shard_id: int,
+                shard_number: int,
                 source_data_path: str,
                 output_data_path: str,
                 overall_shard_count: int,
@@ -68,14 +71,15 @@ def build_shard(shard_tables: Munch,
                 duckdb_threads: int,
                 duckdb_memory_limit: int,
                 working_temporary_dir: str
-                ):
-    with Timer(name=f"\nBuild Shard ID: {shard_id}", text=TIMER_TEXT):
-        shard_name = f"shard_{shard_id}_of_{overall_shard_count}"
+                ) -> Munch:
+    with Timer(name=f"\nBuild Shard ID: {shard_number}", text=TIMER_TEXT):
+        start_timestamp = datetime.now(tz=UTC)
+        shard_name = f"shard_{shard_number}_of_{overall_shard_count}"
 
         shard_query_list = generate_shard_query_list(shard_tables=shard_tables,
                                                      data_path=source_data_path,
                                                      shard_count=overall_shard_count,
-                                                     shard_id=shard_id
+                                                     shard_number=shard_number
                                                      )
 
         db_connection = duckdb.connect(database=":memory:")
@@ -107,13 +111,37 @@ def build_shard(shard_tables: Munch,
                     with tarfile.open(fileobj=zstd_file, mode="w") as tar:
                         tar.add(database_directory, arcname=os.path.basename(database_directory))
 
+                zstd_file_size = os.path.getsize(filename=zstd_file_path)
+
+            # Get a SHA256 Hash of the ZSTD file...
+            with Timer(name=f"Calculating SHA256 hash of: '{zstd_file_path.as_posix()}'", text=TIMER_TEXT):
+                sha256_hash = get_sha256_hash(file_path=zstd_file_path)
+
+            with Timer(name=f"Calculating MD5 hash of: '{zstd_file_path.as_posix()}'", text=TIMER_TEXT):
+                md5_hash = get_md5_hash(file_path=zstd_file_path)
+
+            shard_file_name = pathlib.Path(output_data_path) / zstd_file_path.name
+
             # Copy the output database file...
-            copy_shard_file(src=zstd_file_path.absolute(),
-                            dst=os.path.join(output_data_path, zstd_file_path.name)
+            copy_shard_file(src=zstd_file_path.as_posix(),
+                            dst=shard_file_name.as_posix()
                             )
+
+            return Munch(shard_id=str(uuid.uuid4()),
+                         shard_number=shard_number,
+                         shard_name=shard_name,
+                         shard_file_name=shard_file_name.as_posix(),
+                         shard_file_size=zstd_file_size,
+                         shard_file_sha256_hash=sha256_hash,
+                         shard_file_md5_hash=md5_hash,
+                         tarfile_path=tarfile_path.name,
+                         build_start_timestamp=start_timestamp.isoformat(),
+                         build_end_timestamp=datetime.now(tz=UTC).isoformat()
+                         )
 
 
 def build_shards(shard_definition_file: str,
+                 shard_manifest_file: str,
                  shard_count: int,
                  source_data_path: str,
                  output_data_path: str,
@@ -128,6 +156,7 @@ def build_shards(shard_definition_file: str,
     with Timer(name="\nOverall program", text=TIMER_TEXT):
         logger.info(msg=(f"Running shard generation - (using: "
                          f"--shard-definition-file='{shard_definition_file}' "
+                         f"--shard-manifest-file='{shard_manifest_file}' "
                          f"--shard-count={shard_count} "
                          f"--min-shard={min_shard} "
                          f"--max-shard={max_shard} "
@@ -142,9 +171,19 @@ def build_shards(shard_definition_file: str,
                     )
         assert max_shard is None or max_shard <= shard_count
 
+        overall_start_timestamp = datetime.now(tz=UTC)
+
         # Read our source table shard generation info
         with open(shard_definition_file, "r") as data:
             shard_tables = munchify(x=yaml.safe_load(data.read()))
+
+        shard_manifest_file_path = pathlib.Path(shard_manifest_file)
+        if shard_manifest_file_path.exists():
+            if overwrite:
+                logger.warning(msg=f"File: {shard_manifest_file_path.as_posix()} exists, removing...")
+                shard_manifest_file_path.unlink()
+            else:
+                raise RuntimeError(f"File: {shard_manifest_file_path.as_posix()} exists, aborting.")
 
         target_directory = pathlib.Path(output_data_path)
         if target_directory.exists():
@@ -154,17 +193,35 @@ def build_shards(shard_definition_file: str,
             else:
                 raise RuntimeError(f"Directory: {target_directory.as_posix()} exists, aborting.")
 
-        for shard_id in range(min_shard, (max_shard or shard_count) + 1):
-            build_shard(shard_tables=shard_tables,
-                        shard_id=shard_id,
-                        source_data_path=source_data_path,
-                        output_data_path=output_data_path,
-                        overall_shard_count=shard_count,
-                        zstd_compression_level=zstd_compression_level,
-                        duckdb_threads=duckdb_threads,
-                        duckdb_memory_limit=duckdb_memory_limit,
-                        working_temporary_dir=working_temporary_dir
-                        )
+        shard_manifest_dict_list = []
+        for shard_number in range(min_shard, (max_shard or shard_count) + 1):
+            shard_munch = build_shard(shard_tables=shard_tables,
+                                      shard_number=shard_number,
+                                      source_data_path=source_data_path,
+                                      output_data_path=output_data_path,
+                                      overall_shard_count=shard_count,
+                                      zstd_compression_level=zstd_compression_level,
+                                      duckdb_threads=duckdb_threads,
+                                      duckdb_memory_limit=duckdb_memory_limit,
+                                      working_temporary_dir=working_temporary_dir
+                                      )
+            shard_manifest_dict_list.append(shard_munch.toDict())
+
+        with open(shard_manifest_file, "w") as data:
+            data.write(yaml.safe_dump(data=dict(shard_count=shard_count,
+                                                source_data_path=source_data_path,
+                                                output_data_path=output_data_path,
+                                                zstd_compression_level=zstd_compression_level,
+                                                overall_start_timestamp=overall_start_timestamp.isoformat(),
+                                                overall_end_timestamp=datetime.now(tz=UTC).isoformat(),
+                                                duckdb_version=duckdb.__version__,
+                                                shard_list=shard_manifest_dict_list
+                                                ),
+                                      default_flow_style=False,
+                                      sort_keys=False,
+                                      indent=2
+                                      )
+                       )
 
 
 @click.command()
@@ -175,6 +232,14 @@ def build_shards(shard_definition_file: str,
     required=True,
     show_default=True,
     help="The file that contains the tables for the shard data model, and the queries used to create them for the shard."
+)
+@click.option(
+    "--shard-manifest-file",
+    type=str,
+    default=(DATA_DIR / "shards" / "manifests" / "local_tpch_sf1_shard_manifest.yaml").as_posix(),
+    required=True,
+    show_default=True,
+    help="The output file path will have details about the shards created by this process."
 )
 @click.option(
     "--shard-count",
@@ -253,6 +318,7 @@ def build_shards(shard_definition_file: str,
     help="Can we overwrite the target shard directory if it already exists..."
 )
 def main(shard_definition_file: str,
+         shard_manifest_file: str,
          shard_count: int,
          min_shard: int,
          max_shard: int,

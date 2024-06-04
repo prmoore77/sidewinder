@@ -18,18 +18,21 @@ from uuid import UUID
 import click
 import duckdb
 import websockets
+from websockets.frames import CloseCode
+import yaml
 from dotenv import load_dotenv
 from munch import Munch
 
 from . import __version__ as sidewinder_version
-from .config import logger
-from .constants import SHARD_REQUEST, SHARD_CONFIRMATION, STARTED, DISTRIBUTED, FAILED, COMPLETED, WORKER_SUCCESS, WORKER_FAILED, \
+from .config import logger, DATA_DIR
+from .constants import SHARD_REQUEST, SHARD_CONFIRMATION, STARTED, DISTRIBUTED, FAILED, COMPLETED, WORKER_SUCCESS, \
+    WORKER_FAILED, \
     DEFAULT_MAX_WEBSOCKET_MESSAGE_SIZE, \
     SHARD_DATASET, RESULT, SERVER_PORT, USER_LIST_FILENAME
 from .parser.query import Query
 from .security import SECRET_KEY, authenticate_user
 from .setup.tls_utilities import DEFAULT_CERT_FILE, DEFAULT_KEY_FILE
-from .utils import combine_bytes_results, get_s3_shard_files, get_local_shard_files, coro, get_cpu_count, \
+from .utils import combine_bytes_results, coro, get_cpu_count, \
     get_memory_limit, run_query, pyarrow, pre_sign_shard_url
 
 # Misc. Constants
@@ -43,26 +46,45 @@ class DistributeMode(StrEnum):
 
 
 class Shard:
-    def __init__(self, shard_file_name: str, shard_file_hash: str):
-        self.shard_id = uuid.uuid4()
+    def __init__(self,
+                 shard_id: UUID,
+                 shard_number: int,
+                 shard_name: str,
+                 shard_file_name: str,
+                 shard_file_size: int,
+                 shard_file_sha256_hash: str,
+                 shard_file_md5_hash: str,
+                 tarfile_path: str
+                 ):
+        self.shard_id = shard_id
+        self.shard_number = shard_number
+        self.shard_name = shard_name
         self.shard_file_name = shard_file_name
-        self.shard_file_hash = shard_file_hash
+        self.shard_file_size = shard_file_size
+        self.shard_file_sha256_hash = shard_file_sha256_hash
+        self.shard_file_md5_hash = shard_file_md5_hash
+        self.tarfile_path = tarfile_path
         self.distributed = False
 
     @classmethod
-    async def get_shards(cls, shard_data_path):
-        logger.info(msg=f"Discovering shards (and getting file hashes) from path: '{shard_data_path}'...")
-        if re.search(pattern=r"^s3://", string=shard_data_path):
-            shard_files = await get_s3_shard_files(shard_data_path=shard_data_path)
-        else:
-            shard_files = await get_local_shard_files(shard_data_path=shard_data_path)
+    async def get_shards(cls, shard_manifest_file):
+        logger.info(msg=f"Discovering shards (and getting file hashes) using shard manifest file: '{shard_manifest_file}'")
+
+        with open(shard_manifest_file, "r") as f:
+            shard_manifest = Munch(yaml.safe_load(f.read()))
 
         shards = Munch()
-        for shard_file in shard_files:
-            shard = cls(shard_file_name=shard_file.shard_file_name,
-                        shard_file_hash=shard_file.shard_file_hash
-                        )
-            shards[shard.shard_id] = shard
+        for shard in shard_manifest.shard_list:
+            shard_munch = Munch(shard)
+            shards[shard_munch.shard_id] = cls(shard_id=UUID(shard_munch.shard_id),
+                                               shard_number=shard_munch.shard_number,
+                                               shard_name=shard_munch.shard_name,
+                                               shard_file_name=shard_munch.shard_file_name,
+                                               shard_file_size=shard_munch.shard_file_size,
+                                               shard_file_sha256_hash=shard_munch.shard_file_sha256_hash,
+                                               shard_file_md5_hash=shard_munch.shard_file_md5_hash,
+                                               tarfile_path=shard_munch.tarfile_path
+                                               )
 
         logger.info(msg=f"Discovered: {len(shards)} shard(s)...")
 
@@ -77,7 +99,7 @@ class SidewinderServer:
                  mtls_ca_file: Path,
                  user_list_filename: Path,
                  secret_key: str,
-                 shard_data_path: str,
+                 shard_manifest_file: str,
                  database_file: str,
                  duckdb_threads: int,
                  duckdb_memory_limit: int,
@@ -91,7 +113,7 @@ class SidewinderServer:
         self.mtls_ca_file = mtls_ca_file
         self.user_list_filename = user_list_filename
         self.secret_key = secret_key
-        self.shard_data_path = shard_data_path
+        self.shard_manifest_file = shard_manifest_file
         self.database_file = database_file
         self.duckdb_threads = duckdb_threads
         self.duckdb_memory_limit = duckdb_memory_limit
@@ -124,7 +146,7 @@ class SidewinderServer:
         self.bound_handler = functools.partial(self.connection_handler)
 
     async def run(self):
-        self.shards = await Shard.get_shards(shard_data_path=self.shard_data_path)
+        self.shards = await Shard.get_shards(shard_manifest_file=self.shard_manifest_file)
 
         logger.info(
             msg=(f"Starting Sidewinder Server - version: {self.version} - (\n"
@@ -134,7 +156,7 @@ class SidewinderServer:
                  f" mtls_ca_file: {self.mtls_ca_file.as_posix() if self.mtls_ca_file else 'None'},\n"
                  f" user_list_filename: {self.user_list_filename.as_posix()},\n"
                  f" secret_key: (redacted),\n"
-                 f" shard_data_path: '{self.shard_data_path}',\n"
+                 f" shard_manifest_file: '{self.shard_manifest_file}',\n"
                  f" database_file: '{self.database_file}',\n"
                  f" duckdb_threads: {self.duckdb_threads},\n"
                  f" duckdb_memory_limit: {self.duckdb_memory_limit}b,\n"
@@ -193,7 +215,9 @@ class SidewinderServer:
         if user is None:
             logger.warning(msg=f"Authentication failed for websocket: '{websocket_connection.id}'")
             await websocket_connection.send("Authentication failed")
-            await websocket_connection.close(code=1011, reason="Authentication failed")
+            await websocket_connection.close(code=CloseCode.INTERNAL_ERROR,
+                                             reason="Authentication failed"
+                                             )
             return
         else:
             logger.info(msg=f"User: '{user}' successfully authenticated for websocket: '{websocket_connection.id}'")
@@ -463,10 +487,12 @@ class SidewinderWorker:
     @property
     async def worker_shard_dict(self) -> Dict:
         pre_signed_shard_url = await pre_sign_shard_url(shard_file_url=self.shard.shard_file_name)
+        # Note - we do NOT send the shard file's md5 hash - the worker must compute it to prove that
+        # they have processed the correct shard data.
         return dict(kind=SHARD_DATASET,
                     shard_id=str(self.shard.shard_id),
                     shard_file_name=pre_signed_shard_url,
-                    shard_file_hash=self.shard.shard_file_hash,
+                    shard_file_sha256_hash=self.shard.shard_file_sha256_hash,
                     worker_id=str(self.worker_id)
                     )
 
@@ -505,11 +531,34 @@ class SidewinderWorker:
             msg=f"Sent worker: '{self.worker_id}' - shard info for shard: '{self.shard.shard_id}' - size: {len(worker_shard_message)}")
 
     async def process_shard_confirmation(self, worker_message: Munch):
-        # To do: compare the shard file hash to the server's version
-        # To do: allow workers to persist shards locally, and send shard info not requested
-        logger.info(
-            msg=f"Worker: '{self.worker_id}' has confirmed its shard: '{worker_message.shard_id}' - and "
-                f"is ready to process queries.")
+        if self.shard:
+            logger.info(
+                msg=f"Worker: '{self.worker_id}' has confirmed a just-requested shard: '{worker_message.shard_id}'")
+        elif not self.shard:
+            try:
+                self.shard = self.server.shards[UUID(worker_message.shard_id)]
+            except KeyError:
+                logger.error(
+                    msg=f"Worker: '{self.worker_id}' - confirmed an invalid shard: '{worker_message.shard_id}'")
+                return
+            else:
+                logger.info(
+                    msg=f"Worker: '{self.worker_id}' has confirmed a previously-stored shard: '{worker_message.shard_id}'")
+
+        # The worker was NOT sent the MD5 hash - this check provides proof-of-work (within reason)
+        if worker_message.shard_file_md5_hash != self.shard.shard_file_md5_hash:
+            error_message = f"Shard: '{self.shard.shard_id}' - failed MD5 hash check on worker: '{self.worker_id}'"
+            logger.error(error_message)
+            await self.websocket_connection.send(error_message)
+            await self.websocket_connection.close(code=CloseCode.INTERNAL_ERROR,
+                                                  reason="Shard MD5 hash check mis-match"
+                                                  )
+            return
+        else:
+            logger.info(
+                msg=f"Worker: '{self.worker_id}' has confirmed the correct MD5 hash ({self.shard.shard_file_md5_hash}) for shard: '{self.shard.shard_id}'")
+
+        # If we made it this far - the worker has successfully confirmed the shard
         self.shard.confirmed = True
         self.ready = True
 
@@ -574,7 +623,7 @@ class SidewinderWorker:
                     worker_message = Munch(json.loads(message.decode()))
                     logger.info(
                         msg=f"Message (kind={worker_message.kind}) received from Worker: '{self.worker_id}'"
-                            f" (shard: '{self.shard.shard_id if self.shard else 'n/a'}') - size: {len(message)}")
+                            f" (shard: '{self.shard.shard_number if self.shard else 'n/a'}') - size: {len(message)}")
 
                     if worker_message.kind == SHARD_REQUEST:
                         await self.process_shard_request(worker_message=worker_message)
@@ -651,12 +700,12 @@ class SidewinderWorker:
     help="The source parquet data file path to use."
 )
 @click.option(
-    "--shard-data-path",
+    "--shard-manifest-file",
     type=str,
-    default=os.getenv("SHARD_DATA_PATH", "data/shards/tpch/sf=1"),
-    show_default=True,
+    default=(DATA_DIR / "shards" / "manifests" / "local_tpch_sf1_shard_manifest.yaml").as_posix(),
     required=True,
-    help="The worker source parquet data file path to use (for shards)."
+    show_default=True,
+    help="The shard manifest file tells the server information about the shards - such as location, and more."
 )
 @click.option(
     "--duckdb-threads",
@@ -707,7 +756,7 @@ async def main(version: bool,
                user_list_filename: str,
                secret_key: str,
                database_file: str,
-               shard_data_path: str,
+               shard_manifest_file: str,
                duckdb_threads: int,
                duckdb_memory_limit: int,
                max_process_workers: int,
@@ -735,7 +784,7 @@ async def main(version: bool,
                            mtls_ca_file=mtls_ca_file,
                            user_list_filename=Path(user_list_filename),
                            secret_key=secret_key,
-                           shard_data_path=shard_data_path,
+                           shard_manifest_file=shard_manifest_file,
                            database_file=database_file,
                            duckdb_threads=duckdb_threads,
                            duckdb_memory_limit=duckdb_memory_limit,

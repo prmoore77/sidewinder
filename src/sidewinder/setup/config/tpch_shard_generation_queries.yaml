@@ -2,10 +2,10 @@ tables:
   - name: orders
     parent_table_name: ''
     query_template: |-
-      SELECT CAST ({shard_id} AS INTEGER) AS shard_id
+      SELECT CAST ({shard_number} AS INTEGER) AS shard_number
            , orders.* 
         FROM read_parquet('{data_path}/orders/orders.*.parquet') AS orders
-       WHERE mod (abs (hash (o_custkey)), {overall_shard_count}) + 1 = {shard_id}
+       WHERE mod (abs (hash (o_custkey)), {overall_shard_count}) + 1 = {shard_number}
   - name: lineitem
     parent_table_name: orders
     query_template: |-
