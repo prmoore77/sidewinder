@@ -76,15 +76,16 @@ class Shard:
         shards = Munch()
         for shard in shard_manifest.shard_list:
             shard_munch = Munch(shard)
-            shards[shard_munch.shard_id] = cls(shard_id=UUID(shard_munch.shard_id),
-                                               shard_number=shard_munch.shard_number,
-                                               shard_name=shard_munch.shard_name,
-                                               shard_file_name=shard_munch.shard_file_name,
-                                               shard_file_size=shard_munch.shard_file_size,
-                                               shard_file_sha256_hash=shard_munch.shard_file_sha256_hash,
-                                               shard_file_md5_hash=shard_munch.shard_file_md5_hash,
-                                               tarfile_path=shard_munch.tarfile_path
-                                               )
+            shard_uuid = UUID(shard_munch.shard_id)
+            shards[shard_uuid] = cls(shard_id=shard_uuid,
+                                     shard_number=shard_munch.shard_number,
+                                     shard_name=shard_munch.shard_name,
+                                     shard_file_name=shard_munch.shard_file_name,
+                                     shard_file_size=shard_munch.shard_file_size,
+                                     shard_file_sha256_hash=shard_munch.shard_file_sha256_hash,
+                                     shard_file_md5_hash=shard_munch.shard_file_md5_hash,
+                                     tarfile_path=shard_munch.tarfile_path
+                                     )
 
         logger.info(msg=f"Discovered: {len(shards)} shard(s)...")
 
@@ -533,17 +534,21 @@ class SidewinderWorker:
     async def process_shard_confirmation(self, worker_message: Munch):
         if self.shard:
             logger.info(
-                msg=f"Worker: '{self.worker_id}' has confirmed a just-requested shard: '{worker_message.shard_id}'")
+                msg=f"Worker: '{self.worker_id}' is confirming a just-requested shard: '{worker_message.shard_id}'")
         elif not self.shard:
             try:
                 self.shard = self.server.shards[UUID(worker_message.shard_id)]
             except KeyError:
-                logger.error(
-                    msg=f"Worker: '{self.worker_id}' - confirmed an invalid shard: '{worker_message.shard_id}'")
+                error_message = f"Worker: '{self.worker_id}' - is confirming an invalid shard: '{worker_message.shard_id}'"
+                logger.error(error_message)
+                await self.websocket_connection.send(error_message)
+                await self.websocket_connection.close(code=CloseCode.INTERNAL_ERROR,
+                                                      reason="Invalid Shard confirmed by worker"
+                                                      )
                 return
             else:
                 logger.info(
-                    msg=f"Worker: '{self.worker_id}' has confirmed a previously-stored shard: '{worker_message.shard_id}'")
+                    msg=f"Worker: '{self.worker_id}' is confirming a previously-stored shard: '{worker_message.shard_id}'")
 
         # The worker was NOT sent the MD5 hash - this check provides proof-of-work (within reason)
         if worker_message.shard_file_md5_hash != self.shard.shard_file_md5_hash:
@@ -559,6 +564,10 @@ class SidewinderWorker:
                 msg=f"Worker: '{self.worker_id}' has confirmed the correct MD5 hash ({self.shard.shard_file_md5_hash}) for shard: '{self.shard.shard_id}'")
 
         # If we made it this far - the worker has successfully confirmed the shard
+        worker_message = f"Worker: '{self.worker_id}' is ready to process queries - for shard: '{self.shard.shard_id}'"
+        logger.info(msg=worker_message)
+        await self.websocket_connection.send(worker_message)
+
         self.shard.confirmed = True
         self.ready = True
 

@@ -72,7 +72,7 @@ def build_shard(shard_tables: Munch,
                 duckdb_memory_limit: int,
                 working_temporary_dir: str
                 ) -> Munch:
-    with Timer(name=f"\nBuild Shard ID: {shard_number}", text=TIMER_TEXT):
+    with (Timer(name=f"\nBuild Shard ID: {shard_number}", text=TIMER_TEXT)):
         start_timestamp = datetime.now(tz=UTC)
         shard_name = f"shard_{shard_number}_of_{overall_shard_count}"
 
@@ -120,17 +120,17 @@ def build_shard(shard_tables: Munch,
             with Timer(name=f"Calculating MD5 hash of: '{zstd_file_path.as_posix()}'", text=TIMER_TEXT):
                 md5_hash = get_md5_hash(file_path=zstd_file_path)
 
-            shard_file_name = pathlib.Path(output_data_path) / zstd_file_path.name
+            shard_file_name = os.path.join(output_data_path, zstd_file_path.name)
 
             # Copy the output database file...
             copy_shard_file(src=zstd_file_path.as_posix(),
-                            dst=shard_file_name.as_posix()
+                            dst=shard_file_name
                             )
 
             return Munch(shard_id=str(uuid.uuid4()),
                          shard_number=shard_number,
                          shard_name=shard_name,
-                         shard_file_name=shard_file_name.as_posix(),
+                         shard_file_name=shard_file_name,
                          shard_file_size=zstd_file_size,
                          shard_file_sha256_hash=sha256_hash,
                          shard_file_md5_hash=md5_hash,
