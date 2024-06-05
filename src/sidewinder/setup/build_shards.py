@@ -207,7 +207,11 @@ def build_shards(shard_definition_file: str,
                                       )
             shard_manifest_dict_list.append(shard_munch.toDict())
 
-        with open(shard_manifest_file, "w") as data:
+        # Create directory for the shard manifest file if needed...
+        shard_manifest_file_path = pathlib.Path(shard_manifest_file)
+        shard_manifest_file_path.parent.resolve().mkdir(parents=True, exist_ok=True)
+
+        with open(shard_manifest_file_path, "w") as data:
             data.write(yaml.safe_dump(data=dict(shard_count=shard_count,
                                                 source_data_path=source_data_path,
                                                 output_data_path=output_data_path,
