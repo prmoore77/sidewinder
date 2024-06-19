@@ -5,7 +5,7 @@
 server:
   config:
     databaseFile: data/tpch_sf1.db
-    shardDataPath: s3://voltrondata-sidewinder/shards/tpch/1/
+    shardManifestFile: /opt/sidewinder/manifest/shard_manifest.json
     pingTimeout: 900
 
   replicaCount: 1
@@ -148,7 +148,7 @@ client:
       memory: 2Gi
 
   nodeSelector:
-    eks.amazonaws.com/nodegroup: arm64-hm-node-pool-2023120516275744210000001a
+    eks.amazonaws.com/nodegroup: arm64-node-pool-2024061917211875360000001a
 
   tolerations:
     - key: sidewinder

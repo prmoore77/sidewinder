@@ -711,7 +711,7 @@ class SidewinderWorker:
 @click.option(
     "--shard-manifest-file",
     type=str,
-    default=(DATA_DIR / "shards" / "manifests" / "local_tpch_sf1_shard_manifest.yaml").as_posix(),
+    default=os.getenv("SHARD_MANIFEST_FILE", (DATA_DIR / "shards" / "manifests" / "local_tpch_sf1_shard_manifest.yaml").as_posix()),
     required=True,
     show_default=True,
     help="The shard manifest file tells the server information about the shards - such as location, and more."

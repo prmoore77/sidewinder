@@ -21,9 +21,9 @@ spec:
         {{- include "sidewinder.selectorLabels" . | nindent 8 }}
     spec:
       volumes:
-        - name: local-volume
-          persistentVolumeClaim:
-            claimName: {{ include "sidewinder.fullname" . }}-local-volume-claim
+        - name: host-path-volume
+          hostPath:
+            path: /nvme/disk
         - name: security-volume
           secret:
             secretName: {{ include "sidewinder.fullname" . }}-secret
@@ -44,19 +44,22 @@ spec:
           # args: [ "-c", "sleep infinity" ]
           args: [ "-c", "sidewinder-server" ]
           volumeMounts:
-            - name: local-volume
+            - name: host-path-volume
               mountPath: /opt/sidewinder/data
             - name: security-volume
               mountPath: /opt/sidewinder/security/user_list.json
               subPath: user_list.json
+            - name: manifest-volume
+              mountPath: {{ .Values.server.config.shardManifestFile }}
+              subPath: shard_manifest.json
             - name: tls-volume
               mountPath: /opt/sidewinder/tls
               readOnly: true
           env:
             - name: DATABASE_FILE
               value: {{ .Values.server.config.databaseFile }}
-            - name: SHARD_DATA_PATH
-              value: {{ .Values.server.config.shardDataPath }}
+            - name: SHARD_MANIFEST_FILE
+              value: {{ .Values.server.config.shardManifestFile }}
             - name: SECRET_KEY
               valueFrom:
                 secretKeyRef:
