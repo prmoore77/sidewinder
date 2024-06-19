@@ -9,7 +9,7 @@ import ssl
 import sys
 import uuid
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import StrEnum, auto
 from pathlib import Path
 from typing import Dict
@@ -354,7 +354,7 @@ class SidewinderQuery:
         self.workers = Munch()
         self.total_workers = 0
         self.completed_workers = 0
-        self.start_time = datetime.utcnow().isoformat()
+        self.start_time = datetime.now(tz=UTC).isoformat()
         self.end_time = None
         self.response_sent_to_client = False
         self.distribute_query = None
@@ -383,7 +383,7 @@ class SidewinderQuery:
 
     async def send_results_to_client(self, result_bytes):
         await self.client.websocket_connection.send(result_bytes)
-        self.end_time = datetime.utcnow().isoformat()
+        self.end_time = datetime.now(tz=UTC).isoformat()
         await self.client.websocket_connection.send(
             f"Query: '{self.query_id}' - execution elapsed time: {str(datetime.fromisoformat(self.end_time) - datetime.fromisoformat(self.start_time))}"
         )
