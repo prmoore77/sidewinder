@@ -46,7 +46,7 @@ server:
       memory: 16Gi
 
   nodeSelector:
-    eks.amazonaws.com/nodegroup: arm64-hm-node-pool-2023120516275744210000001a
+    eks.amazonaws.com/nodegroup: arm64-node-pool-2024061917211875360000001a
 
   tolerations:
     - key: sidewinder
@@ -96,7 +96,7 @@ worker:
       memory: 4Gi
 
   nodeSelector:
-    eks.amazonaws.com/nodegroup: arm64-hm-node-pool-2023120516275744210000001a
+    eks.amazonaws.com/nodegroup: arm64-node-pool-2024061917211875360000001a
 
   tolerations:
     - key: sidewinder

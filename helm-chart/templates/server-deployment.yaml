@@ -51,7 +51,7 @@ spec:
               subPath: user_list.json
             - name: security-volume
               mountPath: {{ .Values.server.config.shardManifestFile }}
-              subPath: shard_manifest.json
+              subPath: shard_manifest.yaml
             - name: tls-volume
               mountPath: /opt/sidewinder/tls
               readOnly: true
@@ -65,6 +65,24 @@ spec:
                 secretKeyRef:
                   name: {{ include "sidewinder.fullname" . }}-secret
                   key: SECRET_KEY
+                  optional: false
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sidewinder.fullname" . }}-secret
+                  key: AWS_ACCESS_KEY_ID
+                  optional: false
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sidewinder.fullname" . }}-secret
+                  key: AWS_SECRET_ACCESS_KEY
+                  optional: false
+            - name: AWS_DEFAULT_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sidewinder.fullname" . }}-secret
+                  key: AWS_DEFAULT_REGION
                   optional: false
             - name: TLS
               value: "tls/server.crt tls/server.key"
